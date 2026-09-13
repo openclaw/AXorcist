@@ -8,85 +8,53 @@ class Scanner {
 
     init(string: String) {
         self.string = string
+        self.location = string.startIndex
     }
 
     // MARK: Internal
 
     let string: String
-    var location = 0
+    private(set) var location: String.Index
 
-    /// Scans characters that ARE in the provided set (like original Scanner's scanUpTo/scan(characterSet:))
-    @discardableResult func scanCharacters(in charSet: CustomCharacterSet) -> String? {
-        let initialLocation = self.location
-        var characters = String()
-
-        while self.location < self.string.count, charSet.contains(self.string[self.location]) {
-            characters.append(self.string[self.location])
-            self.location += 1
+    @discardableResult
+    func scanCharacters(in charSet: CustomCharacterSet) -> String? {
+        let start = self.location
+        while self.location < self.string.endIndex, charSet.contains(self.string[self.location]) {
+            self.string.formIndex(after: &self.location)
         }
-
-        if characters.isEmpty {
-            self.location = initialLocation // Revert if nothing was scanned
-            return nil
-        }
-        return characters
+        return start == self.location ? nil : String(self.string[start..<self.location])
     }
 
     // MARK: - Specific Character and String Scanning
 
     @discardableResult func scan(character: Character, options: NSString.CompareOptions = []) -> Character? {
-        guard self.location < self.string.count else { return nil }
+        guard self.location < self.string.endIndex else { return nil }
         let characterString = String(character)
         if characterString
             .compare(String(self.string[self.location]), options: options, range: nil, locale: nil) == .orderedSame
         {
-            self.location += 1
+            self.string.formIndex(after: &self.location)
             return character
         }
         return nil
     }
 
-    @discardableResult func scan(string: String, options: NSString.CompareOptions = []) -> String? {
-        let savepoint = self.location
-        var characters = String()
-
-        for character in string {
-            if let charScanned = self.scan(character: character, options: options) {
-                characters.append(charScanned)
-            } else {
-                self.location = savepoint // Revert on failure
-                return nil
-            }
-        }
-
-        // If we scanned the whole string, it's a match.
-        return characters
-    }
-
     // MARK: - Integer Scanning
 
-    func scanSign() -> Int? {
-        self.scan(dictionary: ["+": 1, "-": -1])
-    }
-
-    func scanInteger<T: SignedInteger>() -> T? {
+    func scanInteger<T: FixedWidthInteger & SignedInteger>() -> T? {
         let savepoint = self.location
         self.scanWhitespaces()
-
-        // Parse sign if present
-        let sign = self.scanSign() ?? 1
-
-        // Parse digits
-        guard let digitString = self.scanDigits() else {
-            // If we found a sign but no digits, revert and return nil
-            if sign != 1 {
-                self.location = savepoint
-            }
+        let start = self.location
+        if self.scan(character: "-") == nil {
+            self.scan(character: "+")
+        }
+        guard self.scanCharacters(in: .decimalDigits) != nil,
+              let value = T(self.string[start..<self.location], radix: 10)
+        else {
+            self.location = savepoint
             return nil
         }
-
-        // Calculate final value with sign applied
-        return T(sign) * self.integerValue(from: digitString)
+        return value
     }
 
     // MARK: - Floating Point Scanning
@@ -160,29 +128,5 @@ class Scanner {
 
     func scanWhitespaces() {
         _ = self.scanCharacters(in: .whitespacesAndNewlines)
-    }
-
-    // MARK: - Dictionary-based Scanning
-
-    func scan<T>(dictionary: [String: T], options: NSString.CompareOptions = []) -> T? {
-        for (key, value) in dictionary where self.scan(string: key, options: options) != nil {
-            // Original Scanner asserts string == key, which is true if scan(string:) returns non-nil.
-            return value
-        }
-        return nil
-    }
-
-    // MARK: Private
-
-    /// Private helper that scans and returns a string of digits
-    private func scanDigits() -> String? {
-        self.scanCharacters(in: .decimalDigits)
-    }
-
-    /// Calculate integer value from digit string with given base
-    private func integerValue<T: BinaryInteger>(from digitString: String, base: T = 10) -> T {
-        digitString.reduce(T(0)) { result, char in
-            result * base + T(Int(String(char))!)
-        }
     }
 }
