@@ -743,7 +743,13 @@ Existing invocations such as `axorc --stdin` and `axorc '{...}'` remain supporte
 
 ### Thread Safety
 
-All operations are MainActor-isolated for thread safety when interacting with the Accessibility API.
+Accessibility element operations are MainActor-isolated. Native observer work runs on bounded background workers.
+
+Global logging and clearing helpers enqueue requests on the main actor. `axGetLogEntries` and `axGetLogsAsStrings` return immutable snapshots of processed history. Main-actor reads through `GlobalAXLogger.shared` drain pending requests first; the CLI uses this path before encoding debug responses. Configuration and payload formatting remain on the main actor. The minimal detail level keeps errors and critical messages, and clearing history resets duplicate suppression.
+
+Global entry snapshots copy details through JSON so they never retain caller-owned reference objects; unencodable details are omitted from those entries. Raw payloads remain available through main-actor `GlobalAXLogger.shared.getEntries()`, and JSON formatting reports encoding failures explicitly.
+
+Queued metadata retains `AnyCodable`'s existing contract: callers must keep referenced values immutable or synchronized while they are in flight. Formatting reads those values on the main actor when the request is processed.
 
 `AXTimeoutHelper.withTimeout` runs its async operation concurrently and returns the first result, timeout, or caller
 cancellation without waiting for uncooperative work to finish. Cancellation received before the call starts is preserved

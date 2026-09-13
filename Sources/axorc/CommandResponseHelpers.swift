@@ -47,7 +47,7 @@ func finalizeAndEncodeResponse(
         errorCode: handlerResponse.errorCode)
 
     if debugCLI || commandDebugLogging {
-        let logsForResponse = axGetLogsAsStrings()
+        let logsForResponse = GlobalAXLogger.shared.getLogsAsStrings()
         finalResponseObject.debugLogs = logsForResponse
     }
 

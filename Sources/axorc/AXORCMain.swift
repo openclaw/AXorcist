@@ -217,7 +217,7 @@ struct AXORCCommand: ParsableCommand {
         self.respondWithError(
             commandId: "input_error",
             error: error,
-            logs: self.debug ? axGetLogsAsStrings(format: .text) : nil)
+            logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings(format: .text) : nil)
         return true
     }
 
@@ -225,7 +225,7 @@ struct AXORCCommand: ParsableCommand {
         self.respondWithError(
             commandId: "no_input",
             error: "No valid JSON input received",
-            logs: self.debug ? axGetLogsAsStrings(format: .text) : nil)
+            logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings(format: .text) : nil)
     }
 
     private func respondWithError(commandId: String, error: String, logs: [String]?) {
@@ -242,7 +242,7 @@ struct AXORCCommand: ParsableCommand {
             self.respondWithError(
                 commandId: "data_conversion_error",
                 error: "Failed to convert JSON string to data",
-                logs: self.debug ? axGetLogsAsStrings() : nil)
+                logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
             throw ExitCode.failure
         }
 
@@ -255,7 +255,7 @@ struct AXORCCommand: ParsableCommand {
             self.respondWithError(
                 commandId: "decode_error",
                 error: "Failed to decode JSON input: \(detail)",
-                logs: self.debug ? axGetLogsAsStrings() : nil)
+                logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
             throw ExitCode.failure
         }
 
@@ -263,7 +263,7 @@ struct AXORCCommand: ParsableCommand {
             self.respondWithError(
                 commandId: "decode_error",
                 error: "JSON command array must not be empty",
-                logs: self.debug ? axGetLogsAsStrings() : nil)
+                logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
             throw ExitCode.failure
         }
 
@@ -276,7 +276,7 @@ struct AXORCCommand: ParsableCommand {
     }
 
     private func flushDebugLogs() {
-        let logMessages = axGetLogsAsStrings(format: .text)
+        let logMessages = GlobalAXLogger.shared.getLogsAsStrings(format: .text)
         guard !logMessages.isEmpty else { return }
         fputs("\n--- Debug Logs (axorc run end) ---\n", stderr)
         logMessages.forEach { fputs($0 + "\n", stderr) }
