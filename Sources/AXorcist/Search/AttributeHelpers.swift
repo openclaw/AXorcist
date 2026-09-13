@@ -27,24 +27,24 @@ public func getElementAttributes(
     for attr in attributesToProcess {
         if attr == AXAttributeNames.kAXParentAttribute {
             let parent = element.parent()
-            result[AXAttributeNames.kAXParentAttribute] = await formatParentAttribute(
+            result[AXAttributeNames.kAXParentAttribute] = formatParentAttribute(
                 parent,
                 outputFormat: outputFormat,
                 valueFormatOption: valueFormatOption)
         } else if attr == AXAttributeNames.kAXChildrenAttribute {
             let children = element.children()
-            result[attr] = await formatChildrenAttribute(
+            result[attr] = formatChildrenAttribute(
                 children,
                 outputFormat: outputFormat,
                 valueFormatOption: valueFormatOption)
         } else if attr == AXAttributeNames.kAXFocusedUIElementAttribute {
             let focused = element.focusedUIElement()
-            result[attr] = await formatFocusedUIElementAttribute(
+            result[attr] = formatFocusedUIElementAttribute(
                 focused,
                 outputFormat: outputFormat,
                 valueFormatOption: valueFormatOption)
         } else {
-            result[attr] = await extractAndFormatAttribute(
+            result[attr] = extractAndFormatAttribute(
                 element: element,
                 attributeName: attr,
                 outputFormat: outputFormat,

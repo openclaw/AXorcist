@@ -6,7 +6,10 @@ import Foundation
 
 /// Helper for formatting raw CFTypeRef values for .textContent output
 @MainActor
-func formatRawCFValueForTextContent(_ rawValue: CFTypeRef?) async -> String {
+func formatRawCFValueForTextContent(
+    _ rawValue: CFTypeRef?,
+    valueFormatOption: ValueFormatOption = .smart) -> String
+{
     guard let value = rawValue else { return AXMiscConstants.kAXNotAvailableString }
     let typeID = CFGetTypeID(value)
     if typeID == CFStringGetTypeID() {
@@ -17,7 +20,7 @@ func formatRawCFValueForTextContent(_ rawValue: CFTypeRef?) async -> String {
         return attributedString.string
     } else if typeID == AXValueGetTypeID() {
         let axValue = unsafeDowncast(value, to: AXValue.self)
-        return formatAXValue(axValue, option: ValueFormatOption.smart)
+        return formatAXValue(axValue, option: valueFormatOption)
     } else if typeID == CFNumberGetTypeID() {
         let number = unsafeDowncast(value, to: NSNumber.self)
         return number.stringValue
@@ -40,14 +43,14 @@ func extractAndFormatAttribute(
     element: Element,
     attributeName: String,
     outputFormat: OutputFormat,
-    valueFormatOption _: ValueFormatOption) async -> AttributeValue?
+    valueFormatOption: ValueFormatOption) -> AttributeValue?
 {
     GlobalAXLogger.shared.log(AXLogEntry(
         level: .debug,
         message: "extractAndFormatAttribute: '\(attributeName)' for element \(element.briefDescription(option: .raw))"))
 
     // Try to extract using known attribute handlers first
-    if let extractedValue = await extractKnownAttribute(
+    if let extractedValue = extractKnownAttribute(
         element: element,
         attributeName: attributeName,
         outputFormat: outputFormat)
@@ -56,11 +59,15 @@ func extractAndFormatAttribute(
     }
 
     // Fallback to raw attribute value
-    return await extractRawAttribute(element: element, attributeName: attributeName, outputFormat: outputFormat)
+    return extractRawAttribute(
+        element: element,
+        attributeName: attributeName,
+        outputFormat: outputFormat,
+        valueFormatOption: valueFormatOption)
 }
 
 @MainActor
-private func extractKnownAttribute(element: Element, attributeName: String, outputFormat: OutputFormat) async -> Any? {
+private func extractKnownAttribute(element: Element, attributeName: String, outputFormat: OutputFormat) -> Any? {
     AttributeFormatterMapping(attributeName: attributeName)
         .extract(from: element, format: outputFormat)
 }
@@ -69,12 +76,13 @@ private func extractKnownAttribute(element: Element, attributeName: String, outp
 private func extractRawAttribute(
     element: Element,
     attributeName: String,
-    outputFormat: OutputFormat) async -> AttributeValue?
+    outputFormat: OutputFormat,
+    valueFormatOption: ValueFormatOption) -> AttributeValue?
 {
     let rawCFValue = element.rawAttributeValue(named: attributeName)
 
     if outputFormat == .textContent {
-        let formatted = await formatRawCFValueForTextContent(rawCFValue)
+        let formatted = formatRawCFValueForTextContent(rawCFValue, valueFormatOption: valueFormatOption)
         return .string(formatted)
     }
 
@@ -93,55 +101,6 @@ private func extractRawAttribute(
     }
 
     return AttributeValue(from: unwrapped)
-}
-
-@MainActor
-func formatParentAttribute(
-    _ parent: Element?,
-    outputFormat: OutputFormat,
-    valueFormatOption _: ValueFormatOption) async -> AttributeValue
-{
-    guard let parentElement = parent else { return .null }
-    if outputFormat == .textContent {
-        return .string("Element: \(parentElement.role() ?? "?Role")")
-    } else {
-        return .string(parentElement.briefDescription(option: .raw))
-    }
-}
-
-@MainActor
-func formatChildrenAttribute(
-    _ children: [Element]?,
-    outputFormat: OutputFormat,
-    valueFormatOption _: ValueFormatOption) async -> AttributeValue
-{
-    guard let actualChildren = children, !actualChildren.isEmpty else {
-        return .null
-    }
-    if outputFormat == .textContent {
-        var childrenSummaries: [String] = []
-        for childElement in actualChildren {
-            childrenSummaries.append(childElement.briefDescription(option: .raw))
-        }
-        return .string("[\(childrenSummaries.joined(separator: ", "))]")
-    } else {
-        let childrenDescriptions = actualChildren.map { $0.briefDescription(option: .raw) }
-        return .array(childrenDescriptions.map { .string($0) })
-    }
-}
-
-@MainActor
-func formatFocusedUIElementAttribute(
-    _ focusedElement: Element?,
-    outputFormat: OutputFormat,
-    valueFormatOption _: ValueFormatOption) async -> AttributeValue
-{
-    guard let element = focusedElement else { return .null }
-    if outputFormat == .textContent {
-        return .string("Focused: \(element.role() ?? "?Role") - \(element.title() ?? "?Title")")
-    } else {
-        return .string(element.briefDescription(option: .raw))
-    }
 }
 
 private struct AttributeFormatterMapping {

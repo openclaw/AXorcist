@@ -86,6 +86,8 @@ public struct Element: Equatable, Hashable {
 - Batch attribute fetching for performance
 
 **Common Operations:**
+`getElementAttributes(...)` applies `valueFormatOption` to parent, child and focused-element descriptions and to native values rendered as text.
+
 ```swift
 // Create element wrapper
 let element = Element(axUIElement)
