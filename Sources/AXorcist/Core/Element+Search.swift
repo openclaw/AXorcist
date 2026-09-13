@@ -200,3 +200,91 @@ extension Element {
         return result
     }
 }
+
+// MARK: - Element Finding
+
+extension Element {
+    /// Find element at a specific screen location
+    @MainActor public static func elementAt(_ point: CGPoint, role: String? = nil) -> Element? {
+        // Get element at point
+        let element = Element.elementAtPoint(point)
+
+        // If role specified, check if matches
+        if let role, let found = element {
+            if found.role() != role {
+                // Try to find parent with matching role
+                var current: Element? = found
+                while let parent = current?.parent() {
+                    if parent.role() == role {
+                        return parent
+                    }
+                    current = parent
+                }
+                return nil
+            }
+        }
+
+        return element
+    }
+
+    /// Find elements matching specific criteria
+    @MainActor public func findElements(
+        role: String? = nil,
+        title: String? = nil,
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
+        maxDepth: Int = 10) -> [Element]
+    {
+        var results: [Element] = []
+        traverseAXTree(from: self, maxDepth: max(0, maxDepth)) { element, _ in
+            if element.matchesCriteria(
+                role: role,
+                title: title,
+                label: label,
+                value: value,
+                identifier: identifier)
+            {
+                results.append(element)
+            }
+            return .continue
+        }
+        return results
+    }
+
+    /// Check if element matches criteria
+    @MainActor private func matchesCriteria(
+        role: String? = nil,
+        title: String? = nil,
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil) -> Bool
+    {
+        // Check role
+        if let role, self.role() != role {
+            return false
+        }
+
+        // Check title
+        if let title, self.title() != title {
+            return false
+        }
+
+        // Check label (using description as label)
+        if let label, self.descriptionText() != label {
+            return false
+        }
+
+        // Check value
+        if let value, self.value() as? String != value {
+            return false
+        }
+
+        // Check identifier
+        if let identifier, self.identifier() != identifier {
+            return false
+        }
+
+        return true
+    }
+}
