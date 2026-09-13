@@ -406,9 +406,9 @@ struct ObserverLifecycleTests {
         try watcher?.start()
         #expect(registry.activeSubscriptionCount == 1)
 
-        let weakWatcher = WeakReference(watcher)
+        weak var weakWatcher = watcher
         watcher = nil
-        #expect(weakWatcher.value == nil)
+        #expect(weakWatcher == nil)
         for _ in 0..<10 where registry.unsubscribeCallCount == 0 {
             await Task.yield()
         }
@@ -617,13 +617,13 @@ extension ObserverLifecycleTests {
         try watcher?.start()
         applicationMonitor.launch(processIdentifier: 42)
 
-        let weakWatcher = WeakReference(watcher)
+        weak var weakWatcher = watcher
         watcher = nil
         for _ in 0..<20 where applicationMonitor.stopCount == 0 {
             await Task.yield()
         }
 
-        #expect(weakWatcher.value == nil)
+        #expect(weakWatcher == nil)
         #expect(applicationMonitor.stopCount == 1)
         #expect(registry.attemptCount(for: 42) == 1)
         #expect(registry.activeProcessIdentifiers.isEmpty)
@@ -735,24 +735,15 @@ extension ObserverLifecycleTests {
         _ = axorcist?.runCommand(AXCommandEnvelope(commandID: "deinit-owner", command: .observe(observe)))
         #expect(registry.activeSubscriptionCount == 1)
 
-        let weakAXorcist = WeakReference(axorcist)
+        weak var weakAXorcist = axorcist
         axorcist = nil
-        #expect(weakAXorcist.value == nil)
+        #expect(weakAXorcist == nil)
         for _ in 0..<10 where registry.unsubscribeCallCount == 0 {
             await Task.yield()
         }
 
         #expect(registry.unsubscribeCallCount == 1)
         #expect(registry.activeSubscriptionCount == 0)
-    }
-}
-
-@MainActor
-private final class WeakReference<Value: AnyObject> {
-    weak var value: Value?
-
-    init(_ value: Value?) {
-        self.value = value
     }
 }
 

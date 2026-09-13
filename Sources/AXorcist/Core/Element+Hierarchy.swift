@@ -1,8 +1,6 @@
 import ApplicationServices
 import Foundation
 
-// GlobalAXLogger should be available
-
 // MARK: - Element Hierarchy Logic
 
 extension Element {
@@ -19,21 +17,16 @@ extension Element {
     }
 
     @MainActor
-    public func children(strict: Bool = false) -> [Element]? { // Added strict parameter
+    public func children(strict: Bool = false) -> [Element]? {
         if let prefetchedChildren {
             return prefetchedChildren
         }
 
-        // Logging for this top-level call
-        // self.briefDescription() is assumed to be refactored and available
         self.axVerboseDebug("Getting children for element: \(self.briefDescription(option: .smart)), strict: \(strict)")
 
-        var childCollector = ChildCollector() // ChildCollector will use GlobalAXLogger internally
+        var childCollector = ChildCollector()
 
-        // print("[PRINT Element.children] Before collectDirectChildren for: \(self.briefDescription(option: .smart))")
         self.collectDirectChildren(collector: &childCollector)
-        // print("[PRINT Element.children] After collectDirectChildren, collector has:
-        // \(childCollector.collectedChildrenCount()) unique children.")
 
         // collectAlternativeChildren may be expensive, so respect `strict` flag there.
         if !strict {
@@ -59,8 +52,6 @@ extension Element {
             }
         }
 
-        // print("[PRINT Element.children] Before finalizeResults, collector has:
-        // \(childCollector.collectedChildrenCount()) unique children.")
         let result = childCollector.finalizeResults()
         self.axVerboseDebug("Final children count: \(result?.count ?? 0)")
         return result
@@ -130,7 +121,6 @@ extension Element {
     @MainActor
     private func collectChildrenFromAttribute(attributeName: String, collector: inout ChildCollector) {
         self.axVerboseDebug("Trying alternative child attribute: '\(attributeName)'.")
-        // self.attribute() now uses GlobalAXLogger and returns T?
         if let childrenUI: [AXUIElement] = attribute(Attribute(attributeName)) {
             if !childrenUI.isEmpty {
                 self.axVerboseDebug("Successfully fetched \(childrenUI.count) children from '\(attributeName)'.")
@@ -146,10 +136,8 @@ extension Element {
 
     @MainActor
     private func collectApplicationWindows(collector: inout ChildCollector) {
-        // self.role() now uses GlobalAXLogger and is assumed refactored
         if self.role() == AXRoleNames.kAXApplicationRole {
             self.axVerboseDebug("Element is AXApplication. Trying kAXWindowsAttribute.")
-            // self.attribute() for .windows, assumed refactored
             if let windowElementsUI: [AXUIElement] = attribute(.windows) {
                 if !windowElementsUI.isEmpty {
                     self.axVerboseDebug("Successfully fetched \(windowElementsUI.count) windows.")
@@ -172,16 +160,9 @@ extension Element {
 private let maxChildrenPerElement = 50000
 
 private struct ChildCollector {
-    // MARK: Public
-
-    /// New public method to get the count of unique children
-    func collectedChildrenCount() -> Int {
-        self.uniqueChildrenSet.count
-    }
-
     // MARK: Internal
 
-    mutating func addChildren(from childrenUI: [AXUIElement]) { // Removed dLog param
+    mutating func addChildren(from childrenUI: [AXUIElement]) {
         if self.limitReached {
             return
         }
@@ -198,14 +179,13 @@ private struct ChildCollector {
             }
 
             let childElement = Element(childUI)
-            if !self.uniqueChildrenSet.contains(childElement) {
+            if self.uniqueChildrenSet.insert(childElement).inserted {
                 self.collectedChildren.append(childElement)
-                self.uniqueChildrenSet.insert(childElement)
             }
         }
     }
 
-    func finalizeResults() -> [Element]? { // Removed dLog param
+    func finalizeResults() -> [Element]? {
         if self.collectedChildren.isEmpty {
             axDebugLog("ChildCollector: No children found after all collection methods.")
             return nil
