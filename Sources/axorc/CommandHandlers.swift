@@ -30,8 +30,7 @@ func handlePerformActionCommand(
         command: command,
         axorcist: axorcist,
         debugCLI: debugCLI,
-        traversalOptions: traversalOptions,
-        executor: executePerformAction)
+        traversalOptions: traversalOptions)
 }
 
 @MainActor
@@ -127,45 +126,16 @@ func handleNotImplementedCommand(command: CommandEnvelope, message: String, debu
 }
 
 @MainActor
-func handleObserveCommand(
+func handleSimpleCommand(
     command: CommandEnvelope,
     axorcist: AXorcist,
     debugCLI: Bool,
     traversalOptions: AXTraversalOptions) -> String
 {
-    guard let axObserveCommand = command.command.toAXCommand(commandEnvelope: command) else {
-        axErrorLog("Failed to convert Observe to AXCommand")
-        let errorResponse = HandlerResponse(data: nil, error: "Internal error: Failed to create AXCommand for Observe")
-        return finalizeAndEncodeResponse(
-            commandId: command.commandId,
-            commandType: command.command.rawValue,
-            handlerResponse: errorResponse,
-            debugCLI: debugCLI,
-            commandDebugLogging: command.debugLogging)
-    }
-
-    let axResponse = axorcist.runCommand(
-        AXCommandEnvelope(commandID: command.commandId, command: axObserveCommand),
+    let handlerResponse = executeLibraryCommand(
+        command: command,
+        axorcist: axorcist,
         traversalOptions: traversalOptions)
-    let handlerResponse = HandlerResponse(from: axResponse)
-
-    return finalizeAndEncodeResponse(
-        commandId: command.commandId,
-        commandType: command.command.rawValue,
-        handlerResponse: handlerResponse,
-        debugCLI: debugCLI,
-        commandDebugLogging: command.debugLogging)
-}
-
-@MainActor
-func handleSimpleCommand(
-    command: CommandEnvelope,
-    axorcist: AXorcist,
-    debugCLI: Bool,
-    traversalOptions: AXTraversalOptions,
-    executor: (CommandEnvelope, AXorcist, AXTraversalOptions) -> HandlerResponse) -> String
-{
-    let handlerResponse = executor(command, axorcist, traversalOptions)
     return finalizeAndEncodeResponse(
         commandId: command.commandId,
         commandType: command.command.rawValue,

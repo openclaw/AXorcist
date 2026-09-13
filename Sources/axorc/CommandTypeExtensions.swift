@@ -29,17 +29,9 @@ extension CommandType {
     ]
 
     private static func createQueryCommand(_ commandEnvelope: CommandEnvelope) -> AXCommand {
-        let effectiveLocator = commandEnvelope.locator ?? Locator(criteria: [])
-        return .query(QueryCommand(
+        .query(QueryCommand(
             appIdentifier: commandEnvelope.application,
-            locator: Locator(
-                matchAll: effectiveLocator.matchAll,
-                criteria: effectiveLocator.criteria,
-                rootElementPathHint: effectiveLocator.rootElementPathHint,
-                descendantCriteria: effectiveLocator.descendantCriteria,
-                requireAction: effectiveLocator.requireAction,
-                computedNameContains: effectiveLocator.computedNameContains,
-                debugPathSearch: commandEnvelope.locator?.debugPathSearch),
+            locator: commandEnvelope.locator ?? Locator(criteria: []),
             attributesToReturn: commandEnvelope.attributes,
             maxDepthForSearch: commandEnvelope.maxDepth ?? 10,
             includeChildrenBrief: commandEnvelope.includeChildrenBrief,
