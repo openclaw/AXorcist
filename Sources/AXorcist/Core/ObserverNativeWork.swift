@@ -417,29 +417,9 @@ nonisolated class NativeWorkCompletion<Value: Sendable>: @unchecked Sendable {
     private let timeoutValue: Value
     private var result: Value?
     private var waiters: [Waiter] = []
-    private var parkedWaiterCount = 0
-    private var finishedWaiterCount = 0
-    private var finishedSynchronousWaiterCount = 0
 
     init(timeoutValue: Value) {
         self.timeoutValue = timeoutValue
-    }
-
-    @discardableResult
-    func parkWaiter() -> Bool {
-        self.condition.lock()
-        defer { self.condition.unlock() }
-        guard self.result == nil else { return false }
-        self.parkedWaiterCount += 1
-        return true
-    }
-
-    func unparkWaiter() {
-        self.condition.lock()
-        if self.parkedWaiterCount > 0 {
-            self.parkedWaiterCount -= 1
-        }
-        self.condition.unlock()
     }
 
     func wait(until deadline: ContinuousClock.Instant) -> Value? {
@@ -458,15 +438,7 @@ nonisolated class NativeWorkCompletion<Value: Sendable>: @unchecked Sendable {
     }
 
     var waiterCount: Int {
-        self.condition.withLock { self.waiters.count + self.parkedWaiterCount }
-    }
-
-    var waiterCountAtFinish: Int {
-        self.condition.withLock { self.finishedWaiterCount }
-    }
-
-    var synchronousWaiterCountAtFinish: Int {
-        self.condition.withLock { self.finishedSynchronousWaiterCount }
+        self.condition.withLock { self.waiters.count }
     }
 
     @discardableResult
@@ -477,8 +449,6 @@ nonisolated class NativeWorkCompletion<Value: Sendable>: @unchecked Sendable {
             return 0
         }
         self.result = result
-        self.finishedWaiterCount = self.waiters.count + self.parkedWaiterCount
-        self.finishedSynchronousWaiterCount = self.parkedWaiterCount
         let waiters = self.waiters
         self.waiters.removeAll()
         self.condition.broadcast()
