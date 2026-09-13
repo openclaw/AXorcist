@@ -27,6 +27,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
             ],
+            path: "Sources/AXorcist",
             swiftSettings: approachableConcurrencySettings
         ),
         .executableTarget(
@@ -35,6 +36,7 @@ let package = Package(
                 "AXorcist",
                 .product(name: "Commander", package: "Commander"),
             ],
+            path: "Sources/axorc",
             swiftSettings: approachableConcurrencySettings
         ),
         .testTarget(
@@ -44,11 +46,13 @@ let package = Package(
                 "axorc",
                 .product(name: "Logging", package: "swift-log"),
             ],
+            path: "Tests/AXorcistTests",
             swiftSettings: approachableConcurrencySettings
         ),
         .testTarget(
             name: "AXorcistCommandConversionTests",
             dependencies: ["AXorcist", "axorc"],
+            path: "Tests/AXorcistCommandConversionTests",
             swiftSettings: approachableConcurrencySettings
         ),
     ],
