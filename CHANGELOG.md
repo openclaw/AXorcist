@@ -4,6 +4,11 @@ All notable changes to AXorcist will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+- Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
+- Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
+- Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
+
 ### Changed
 - Update swift-log to 1.15.1 for upstream logging fixes.
 - Validate Swift 6.2.4 and 6.3.3 with pinned Actions and SwiftFormat 0.63.0, and build CodeQL directly while retaining the Swift 6.2 and macOS 14 minimums.

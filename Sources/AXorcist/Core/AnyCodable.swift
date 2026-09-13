@@ -11,8 +11,8 @@ import Foundation
 /// the exact types at compile time. This is particularly useful for handling
 /// accessibility attributes which can have various value types.
 ///
-/// The struct is marked as @unchecked Sendable because the underlying value
-/// property is immutable after initialization, making it safe for concurrent access.
+/// The wrapper is immutable. Callers must ensure referenced values are safe to share
+/// across tasks; `@unchecked Sendable` does not make mutable payloads thread-safe.
 public struct AnyCodable: Codable, @unchecked Sendable, Equatable {
     // MARK: Lifecycle
 
@@ -28,6 +28,8 @@ public struct AnyCodable: Codable, @unchecked Sendable, Equatable {
             self.value = bool
         } else if let int = try? container.decode(Int.self) {
             self.value = int
+        } else if let unsigned = try? container.decode(UInt64.self) {
+            self.value = unsigned
         } else if let double = try? container.decode(Double.self) {
             self.value = double
         } else if let string = try? container.decode(String.self) {
@@ -48,6 +50,10 @@ public struct AnyCodable: Codable, @unchecked Sendable, Equatable {
     public let value: Any
 
     public func encode(to encoder: any Encoder) throws {
+        if let number = FoundationNumber(boxed: self.value) {
+            try number.encode(to: encoder)
+            return
+        }
         var container = encoder.singleValueContainer()
         if self.value is () { // Our nil marker for explicit nil
             try container.encodeNil()
@@ -89,6 +95,13 @@ public struct AnyCodable: Codable, @unchecked Sendable, Equatable {
     // MARK: - Equatable Implementation
 
     public static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
+        if let left = lhs.value as? NSNumber, let right = rhs.value as? NSNumber {
+            let leftIsBoolean = CFGetTypeID(left) == CFBooleanGetTypeID()
+            let rightIsBoolean = CFGetTypeID(right) == CFBooleanGetTypeID()
+            if leftIsBoolean != rightIsBoolean {
+                return false
+            }
+        }
         // Handle nil marker case
         if lhs.value is (), rhs.value is () {
             return true
