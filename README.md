@@ -418,6 +418,8 @@ Find element at specific screen coordinates.
 ### 5. Batch Commands
 Execute multiple commands in sequence.
 
+Every child must convert to a supported library command before execution starts, including children of nested batches. Invalid children reject the entire batch and no children execute; callers that previously relied on invalid children being skipped must correct those requests. After validation, runtime failures retain the existing behavior: remaining children still execute, and the response reports an aggregate error without per-command data. Encoding failures return escaped JSON even when command IDs contain quotes or newlines.
+
 ```json
 {
   "command_id": "inspect-and-fill",

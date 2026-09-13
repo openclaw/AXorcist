@@ -115,7 +115,8 @@ struct CommandExecutor {
         }
 
         axErrorLog("Unhandled command: \(command.command.rawValue)")
-        return "{\"error\": \"Unhandled command \(command.command.rawValue)\", \"commandId\": \"\(command.commandId)\"}"
+        return encodeErrorFallback(
+            commandId: command.commandId, message: "Unhandled command \(command.command.rawValue)")
     }
 
     @MainActor
@@ -170,7 +171,7 @@ struct CommandExecutor {
             errorCode: nil,
             debugLogs: debugCLI || command.debugLogging ? axGetLogsAsStrings() : nil)
         return encodeToJson(stopResponse) ??
-            "{\"error\": \"Encoding stopObservation response failed\", \"commandId\": \"\(command.commandId)\"}"
+            encodeErrorFallback(commandId: command.commandId, message: "Encoding stopObservation response failed")
     }
 
     @MainActor
@@ -180,7 +181,7 @@ struct CommandExecutor {
             status: "success",
             trusted: AXIsProcessTrusted())
         return encodeToJson(trustedResponse) ??
-            "{\"error\": \"Encoding isProcessTrusted response failed\", \"commandId\": \"\(command.commandId)\"}"
+            encodeErrorFallback(commandId: command.commandId, message: "Encoding isProcessTrusted response failed")
     }
 
     @MainActor
@@ -191,6 +192,6 @@ struct CommandExecutor {
             status: "success",
             enabled: axEnabled)
         return encodeToJson(featureEnabledResponse) ??
-            "{\"error\": \"Encoding isAXFeatureEnabled response failed\", \"commandId\": \"\(command.commandId)\"}"
+            encodeErrorFallback(commandId: command.commandId, message: "Encoding isAXFeatureEnabled response failed")
     }
 }

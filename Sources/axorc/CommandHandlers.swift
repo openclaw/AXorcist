@@ -109,9 +109,9 @@ func handlePingCommand(command: CommandEnvelope, debugCLI: Bool) -> String {
 
     do {
         let data = try encoder.encode(response)
-        return String(data: data, encoding: .utf8) ?? "{\"error\": \"Failed to encode ping response\"}"
+        return String(data: data, encoding: .utf8) ?? encodeErrorFallback(message: "Failed to encode ping response")
     } catch {
-        return "{\"error\": \"Failed to encode ping response: \(error.localizedDescription)\"}"
+        return encodeErrorFallback(message: "Failed to encode ping response: \(error.localizedDescription)")
     }
 }
 
@@ -197,5 +197,5 @@ private func encodeBatchQueryResponse(
         return json
     }
     let identifier = commandId ?? response.commandId
-    return "{\"error\": \"Encoding batch response failed\", \"commandId\": \"\(identifier)\"}"
+    return encodeErrorFallback(commandId: identifier, message: "Encoding batch response failed")
 }
