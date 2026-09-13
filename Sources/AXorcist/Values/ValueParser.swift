@@ -360,37 +360,6 @@ private func parseDefaultAXValueType(
     from stringValue: String,
     targetType: AXValueType) throws -> AXValue?
 {
-    // Example for a hypothetical boolean AXValue type (targetType.rawValue == 4 was in original UIElementUtilities.m)
-    // This would need mapping if AXValue could directly hold booleans.
-    // Assuming 4 is a placeholder for a boolean-like AXValue type code
-    if targetType.rawValue == 4 {
-        if stringValue.lowercased() == "true" {
-            // boolVal = true // Was unused
-        } else if stringValue.lowercased() == "false" {
-            // boolVal = false // Was unused
-        } else {
-            axWarningLog(
-                "parseDefaultAXValueType: Could not parse '\(stringValue)' as boolean " +
-                    "for targetType \(targetType.rawValue)",
-                file: #file,
-                function: #function,
-                line: #line)
-            throw AccessibilityError.valueParsingFailed(
-                details: "Could not parse '\(stringValue)' as boolean for AXValueType \(targetType.rawValue)",
-                attribute: stringFromAXValueType(targetType))
-        }
-        // return AXValueCreate(targetType, &boolVal)
-        // This depends on AXValueCreate supporting this targetType with DarwinBoolean
-        axWarningLog(
-            "parseDefaultAXValueType: AXValueCreate with DarwinBoolean for targetType \(targetType.rawValue) " +
-                "is not standard/supported.",
-            file: #file,
-            function: #function,
-            line: #line)
-        // Or throw an error that this specific AXValueType isn't handled for creation from bool
-        return nil
-    }
-
     let typeString = stringFromAXValueType(targetType)
     let rawValue = targetType.rawValue
     axWarningLog(
@@ -402,5 +371,3 @@ private func parseDefaultAXValueType(
         attribute: "Parsing string to AXValue of type \(stringFromAXValueType(targetType))",
         elementDescription: nil)
 }
-
-// stringFromAXValueType is now defined in ValueHelpers.swift
