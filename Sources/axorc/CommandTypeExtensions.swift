@@ -93,19 +93,15 @@ extension CommandType {
             axErrorLog("toAXCommand: Batch command missing subCommands in CommandEnvelope.")
             return nil
         }
-        let axSubCommands = batchSubCommands.compactMap { subCmdEnv -> AXBatchCommand.SubCommandEnvelope? in
-            guard let axSubCmd = subCmdEnv.command.toAXCommand(commandEnvelope: subCmdEnv) else {
-                let message = "Failed to convert subCommand '\(subCmdEnv.commandId)' of type " +
-                    "'\(subCmdEnv.command.rawValue)' to AXCommand."
-                axErrorLog("toAXCommand: \(message)")
+        var axSubCommands: [AXBatchCommand.SubCommandEnvelope] = []
+        axSubCommands.reserveCapacity(batchSubCommands.count)
+        for subCommand in batchSubCommands {
+            guard let converted = subCommand.command.toAXCommand(commandEnvelope: subCommand) else {
+                axErrorLog("toAXCommand: Failed to convert subCommand '\(subCommand.commandId)' " +
+                    "of type '\(subCommand.command.rawValue)'.")
                 return nil
             }
-            return AXBatchCommand.SubCommandEnvelope(commandID: subCmdEnv.commandId, command: axSubCmd)
-        }
-        if axSubCommands.count != batchSubCommands.count {
-            axErrorLog(
-                "toAXCommand: Some subCommands in batch failed. Original: \(batchSubCommands.count), " +
-                    "Converted: \(axSubCommands.count)")
+            axSubCommands.append(.init(commandID: subCommand.commandId, command: converted))
         }
         return .batch(AXBatchCommand(commands: axSubCommands))
     }

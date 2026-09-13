@@ -84,6 +84,19 @@ nonisolated struct RawProtocolTests {
         #expect(message == "JSON command array must not be empty")
     }
 
+    @Test
+    func `Unconvertible batch children return failure instead of empty success`() throws {
+        let payload = """
+        {"command_id":"invalid-batch","command":"batch","sub_commands":[
+          {"command_id":"missing-action","command":"performAction"}]}
+        """
+        let result = try self.run(payload, source: "stdin")
+        let object = try self.response(result)
+        #expect(object["status"] as? String == "error")
+        #expect(object["data"] == nil)
+        #expect(result.exitCode == 1)
+    }
+
     private func payload(command: String) -> String {
         // A nonexistent application keeps action and observer dispatch safe on developer machines.
         let target = "com.example.axorc.protocol-test-missing"

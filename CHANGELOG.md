@@ -6,6 +6,8 @@ All notable changes to AXorcist will be documented in this file.
 
 ### Fixed
 - Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
+- Reject unconvertible commands in nested batches before execution instead of silently dropping them.
+- Keep encoding-error responses valid JSON for command IDs containing quotes, backslashes, or newlines.
 - Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
 

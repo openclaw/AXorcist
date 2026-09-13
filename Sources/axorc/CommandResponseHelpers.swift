@@ -55,7 +55,7 @@ func finalizeAndEncodeResponse(
         return encoded
     }
 
-    return "{\"error\": \"JSON encoding failed\", \"commandId\": \"\(commandId)\"}"
+    return encodeErrorFallback(commandId: commandId, message: "JSON encoding failed")
 }
 
 func encodeToJson(_ object: some Encodable) -> String? {
@@ -73,6 +73,15 @@ func encodeToJson(_ object: some Encodable) -> String? {
         axErrorLog("JSON encoding failed: \(error.localizedDescription)")
         return nil
     }
+}
+
+func encodeErrorFallback(commandId: String? = nil, message: String) -> String {
+    var fields = ["error": message]
+    if let commandId {
+        fields["commandId"] = commandId
+    }
+    // Dictionary keys retain the established fallback spelling without manual JSON interpolation.
+    return encodeToJson(fields) ?? "{\"error\":\"JSON encoding failed\"}"
 }
 
 extension EncodingError {
