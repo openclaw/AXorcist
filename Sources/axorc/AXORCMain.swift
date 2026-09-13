@@ -107,8 +107,6 @@ struct AXORCCommand: ParsableCommand {
 
         if command.command == .observe {
             self.handleSuccessfulObserveCommand(owner: axorcist)
-        } else {
-            axClearLogs()
         }
     }
 
@@ -144,6 +142,7 @@ struct AXORCCommand: ParsableCommand {
     @MainActor
     private mutating func runMain() throws {
         self.configureLogging()
+        defer { GlobalAXLogger.shared.clearEntries() }
         let traversalOptions = self.resolvedTraversalOptions()
         self.logDebugVersion()
 

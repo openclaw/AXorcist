@@ -4,6 +4,20 @@ import Testing
 /// Subprocess waits must leave MainActor free for observer lifecycle tests running alongside this suite.
 @Suite("Raw JSON wire protocol", .tags(.safe), .serialized)
 nonisolated struct RawProtocolTests {
+    @Test
+    func `Verbose diagnostics reach the response and final stderr dump`() throws {
+        let payload = #"{"command_id":"debug-history","command":"ping"}"#
+        let result = try runAXORCCommand(arguments: ["raw", "--debug", "--verbose", "--json", payload])
+        let object = try self.response(result)
+        let logs = try #require(object["debug_logs"] as? [String])
+        let stderr = try #require(result.errorOutput)
+        #expect(result.exitCode == 0)
+        #expect(!logs.isEmpty)
+        #expect(stderr.contains("--- Debug Logs (axorc run end) ---"))
+        #expect(stderr.contains("--- End Debug Logs ---"))
+        #expect(logs.allSatisfy { stderr.contains($0) })
+    }
+
     @Test(arguments: ["json", "stdin", "file"])
     func `Every protocol command reaches dispatch through every input source`(source: String) throws {
         let commands = [
