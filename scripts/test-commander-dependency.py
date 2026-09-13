@@ -177,7 +177,7 @@ let package = Package(
         write(commander / "newer-release.txt", "Must not select 0.2.5 or main.\n")
         self.commit(commander, "0.2.5")
         logging = self.library("swift-log", "Logging")
-        log_revision = self.commit(logging, "1.5.4")
+        log_revision = self.commit(logging, "1.15.1")
         axorcist = self.root / "repositories" / "AXorcist"
         self.copy_manifest(axorcist)
         manifest = self.dump(axorcist, self.root / "repository-state")
@@ -195,7 +195,7 @@ let package = Package(
         self.expected = {
             "axorcist": (FIXTURE_VERSION, axorcist_revision),
             "commander": ("0.2.4", commander_revision),
-            "swift-log": ("1.5.4", log_revision),
+            "swift-log": ("1.15.1", log_revision),
         }
 
     def mirror(self, path, state):
