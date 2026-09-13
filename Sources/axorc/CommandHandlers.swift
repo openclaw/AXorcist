@@ -50,7 +50,7 @@ func handleBatchCommand(
     var finalResponseObject = buildBatchResponse(commandId: command.commandId, axResponse: axResponse)
 
     if debugCLI || command.debugLogging {
-        finalResponseObject.debugLogs = axGetLogsAsStrings()
+        finalResponseObject.debugLogs = GlobalAXLogger.shared.getLogsAsStrings()
     }
 
     return encodeBatchQueryResponse(finalResponseObject)
@@ -100,7 +100,7 @@ func handlePingCommand(command: CommandEnvelope, debugCLI: Bool) -> String {
         status: "success",
         message: formattedMessage,
         details: message.isEmpty ? nil : message,
-        debugLogs: (debugCLI || command.debugLogging) ? axGetLogsAsStrings() : nil)
+        debugLogs: (debugCLI || command.debugLogging) ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
 
     // Use the same encoder settings as other responses
     let encoder = JSONEncoder()

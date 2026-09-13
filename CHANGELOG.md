@@ -13,6 +13,7 @@ All notable changes to AXorcist will be documented in this file.
 - Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
 - Parse signed integer bounds without trapping, return failure for overflow, and scan long geometry/range inputs with a forward-only string cursor.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
+- Restore global log snapshots and complete CLI debug logs, preserve entry identity, and reset severity-aware duplicate tracking when history is cleared.
 
 ### Changed
 - Update swift-log to 1.15.1 for upstream logging fixes.
