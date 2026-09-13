@@ -188,25 +188,6 @@ struct BatchQueryResponse: Codable {
     var debugLogs: [String]?
 }
 
-/// Generic query response for commands (renamed to avoid conflict)
-struct GenericQueryResponse: Codable {
-    enum CodingKeys: String, CodingKey {
-        case commandId
-        case commandType
-        case status
-        case data
-        case message
-        case debugLogs
-    }
-
-    let commandId: String
-    let commandType: String
-    let status: String
-    let data: AnyCodable?
-    let message: String?
-    var debugLogs: [String]?
-}
-
 /// Helper for DecodingError display
 extension DecodingError {
     var humanReadableDescription: String {

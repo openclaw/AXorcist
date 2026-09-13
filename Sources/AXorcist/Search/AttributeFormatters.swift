@@ -66,18 +66,6 @@ private func extractKnownAttribute(element: Element, attributeName: String, outp
 }
 
 @MainActor
-private func formatBooleanAttribute(_ value: Bool?, outputFormat: OutputFormat) -> Any? {
-    guard let val = value else { return nil }
-    return outputFormat == .textContent ? val.description : val
-}
-
-@MainActor
-private func formatOptionalIntAttribute(_ value: Int32?, outputFormat: OutputFormat) -> Any? {
-    guard let val = value else { return nil }
-    return outputFormat == .textContent ? val.description : val
-}
-
-@MainActor
 private func extractRawAttribute(
     element: Element,
     attributeName: String,

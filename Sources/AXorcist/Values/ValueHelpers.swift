@@ -52,20 +52,13 @@ public func axValue<T>(
 
 public func stringFromAXValueType(_ type: AXValueType) -> String {
     switch type {
-    case .cgPoint: return "CGPoint (kAXValueCGPointType)"
-    case .cgSize: return "CGSize (kAXValueCGSizeType)"
-    case .cgRect: return "CGRect (kAXValueCGRectType)"
-    case .cfRange: return "CFRange (kAXValueCFRangeType)"
-    case .axError: return "AXError (kAXValueAXErrorType)"
-    case .illegal: return "Illegal (kAXValueIllegalType)"
+    case .cgPoint: "CGPoint (kAXValueCGPointType)"
+    case .cgSize: "CGSize (kAXValueCGSizeType)"
+    case .cgRect: "CGRect (kAXValueCGRectType)"
+    case .cfRange: "CFRange (kAXValueCFRangeType)"
+    case .axError: "AXError (kAXValueAXErrorType)"
+    case .illegal: "Illegal (kAXValueIllegalType)"
     default:
-        // AXValueType is not exhaustive in Swift's AXValueType enum from ApplicationServices.
-        // Common missing ones include Boolean (4), Number (5), Array (6), Dictionary (7), String (8), URL (9), etc.
-        // We rely on ValueUnwrapper to handle these based on CFGetTypeID.
-        // This function is mostly for AXValue encoded types.
-        if type.rawValue == 4 { // kAXValueBooleanType is often 4 but not in the public enum
-            return "Boolean (rawValue 4, contextually kAXValueBooleanType)"
-        }
-        return "Unknown AXValueType (rawValue: \(type.rawValue))"
+        "Unknown AXValueType (rawValue: \(type.rawValue))"
     }
 }

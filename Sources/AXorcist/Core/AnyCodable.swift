@@ -117,35 +117,6 @@ public struct AnyCodable: Codable, @unchecked Sendable, Equatable {
     }
 }
 
-/// Helper struct for AnyCodable to properly encode intermediate Encodable values
-/// This might not be necessary if the direct (value as! Encodable).encode(to: encoder) works.
-struct AnyCodablePośrednik<T: Encodable>: Encodable {
-    // MARK: Lifecycle
-
-    init(_ value: T) {
-        self.value = value
-    }
-
-    // MARK: Internal
-
-    let value: T
-
-    func encode(to encoder: any Encoder) throws {
-        try self.value.encode(to: encoder)
-    }
-}
-
-/// Helper protocol to check if a type is Optional
-private protocol OptionalProtocol {
-    static func isOptional() -> Bool
-}
-
-extension Optional: OptionalProtocol {
-    static func isOptional() -> Bool {
-        true
-    }
-}
-
 extension AnyCodable {
     fileprivate static func compareArrays(_ lhs: [Any], _ rhs: [Any]) -> Bool {
         guard lhs.count == rhs.count else { return false }

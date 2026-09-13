@@ -12,12 +12,3 @@ func NSPointToDictionary(_ point: CGPoint) -> [String: CGFloat] {
 func NSSizeToDictionary(_ size: CGSize) -> [String: CGFloat] {
     ["width": size.width, "height": size.height]
 }
-
-func NSRectToDictionary(_ rect: CGRect) -> [String: Any] { // Changed to Any for origin/size
-    [
-        "x": rect.origin.x,
-        "y": rect.origin.y,
-        "width": rect.size.width,
-        "height": rect.size.height,
-    ]
-}
