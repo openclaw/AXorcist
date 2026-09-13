@@ -19,7 +19,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/steipete/Commander.git", exact: "0.2.4"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.4"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
         .target(

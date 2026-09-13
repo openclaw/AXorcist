@@ -5,7 +5,8 @@ All notable changes to AXorcist will be documented in this file.
 ## Unreleased
 
 ### Changed
-- Refresh CI to Swift 6.2.4 and SwiftFormat 0.63.0 while retaining the Swift 6.2 and macOS 14 minimums.
+- Update swift-log to 1.15.1 for upstream logging fixes.
+- Validate Swift 6.2.4 and 6.3.3 with pinned Actions and SwiftFormat 0.63.0, and build CodeQL directly while retaining the Swift 6.2 and macOS 14 minimums.
 
 ## [0.1.9] - 2026-08-31
 
