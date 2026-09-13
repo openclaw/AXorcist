@@ -60,9 +60,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      - name: Build Swift sources and tests
+      - name: Build Swift library and CLI
         if: matrix.language == 'swift'
-        run: swift build --build-tests
+        run: swift build
 
       - name: Analyze
         uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
