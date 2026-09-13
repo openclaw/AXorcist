@@ -143,6 +143,11 @@ extension AttributeValue {
             return
         }
 
+        if let number = FoundationNumber(boxed: value) {
+            self = number.attributeValue
+            return
+        }
+
         switch value {
         case let string as String:
             self = .string(string)
@@ -228,15 +233,6 @@ extension AttributeValue {
 
 extension AttributeValue {
     fileprivate static func fromNSNumber(_ number: NSNumber) -> AttributeValue {
-        if number === kCFBooleanTrue as NSNumber {
-            return .bool(true)
-        }
-        if number === kCFBooleanFalse as NSNumber {
-            return .bool(false)
-        }
-        if number.doubleValue.truncatingRemainder(dividingBy: 1) == 0 {
-            return .int(number.intValue)
-        }
-        return .double(number.doubleValue)
+        FoundationNumber(number).attributeValue
     }
 }

@@ -406,7 +406,7 @@ struct ObserverLifecycleTests {
         try watcher?.start()
         #expect(registry.activeSubscriptionCount == 1)
 
-        weak var weakWatcher = watcher
+        weak let weakWatcher = watcher
         watcher = nil
         #expect(weakWatcher == nil)
         for _ in 0..<10 where registry.unsubscribeCallCount == 0 {
@@ -617,7 +617,7 @@ extension ObserverLifecycleTests {
         try watcher?.start()
         applicationMonitor.launch(processIdentifier: 42)
 
-        weak var weakWatcher = watcher
+        weak let weakWatcher = watcher
         watcher = nil
         for _ in 0..<20 where applicationMonitor.stopCount == 0 {
             await Task.yield()
@@ -735,7 +735,7 @@ extension ObserverLifecycleTests {
         _ = axorcist?.runCommand(AXCommandEnvelope(commandID: "deinit-owner", command: .observe(observe)))
         #expect(registry.activeSubscriptionCount == 1)
 
-        weak var weakAXorcist = axorcist
+        weak let weakAXorcist = axorcist
         axorcist = nil
         #expect(weakAXorcist == nil)
         for _ in 0..<10 where registry.unsubscribeCallCount == 0 {
