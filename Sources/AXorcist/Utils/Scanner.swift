@@ -2,50 +2,7 @@
 
 import Foundation
 
-/// A lightweight string scanning utility for parsing text.
-///
-/// `Scanner` provides efficient character-by-character scanning of strings with
-/// support for character sets, string literals, and pattern matching. It maintains
-/// a current position and allows for forward scanning operations.
-///
-/// ## Overview
-///
-/// The scanner:
-/// - Maintains a current position in the string
-/// - Supports scanning based on character sets
-/// - Can scan for specific strings or patterns
-/// - Provides utilities for identifier parsing
-/// - Allows peeking at upcoming characters without advancing
-///
-/// This is an internal utility class used by AXorcist for parsing various string formats.
-///
-/// ## Topics
-///
-/// ### Creating a Scanner
-///
-/// - ``init(string:)``
-///
-/// ### Scanner State
-///
-/// - ``string``
-/// - ``location``
-/// - ``isAtEnd``
-/// - ``remainingString``
-///
-/// ### Character Set Scanning
-///
-/// - ``scanUpToCharacters(in:)``
-/// - ``scanCharacters(from:)``
-///
-/// ### String Scanning
-///
-/// - ``scanString(_:)``
-/// - ``scanUpToString(_:)``
-///
-/// ### Character Sets
-///
-/// - ``identifierFirstCharSet``
-/// - ``identifierFollowingCharSet``
+/// Internal cursor used to parse accessibility geometry and ranges.
 class Scanner {
     // MARK: Lifecycle
 
@@ -55,51 +12,8 @@ class Scanner {
 
     // MARK: Internal
 
-    static var identifierFirstCharSet: CustomCharacterSet {
-        CustomCharacterSet(charactersInString: characterSets.lowercaseLetters + characterSets.uppercaseLetters + "_")
-    }
-
-    static var identifierFollowingCharSet: CustomCharacterSet {
-        CustomCharacterSet(charactersInString: characterSets.lowercaseLetters + characterSets
-            .uppercaseLetters + characterSets.digits + "_")
-    }
-
-    // MARK: - Properties and Initialization
-
     let string: String
-    var location: Int = 0
-
-    var isAtEnd: Bool {
-        self.location >= self.string.count
-    }
-
-    /// Helper to get the remaining string
-    var remainingString: String {
-        if self.isAtEnd {
-            return ""
-        }
-        let startIndex = self.string.index(self.string.startIndex, offsetBy: self.location)
-        return String(self.string[startIndex...])
-    }
-
-    // MARK: - Character Set Scanning
-
-    /// A more conventional scanUpTo (scans until a character in the set is found)
-    @discardableResult func scanUpToCharacters(in charSet: CustomCharacterSet) -> String? {
-        let initialLocation = self.location
-        var scannedCharacters = String()
-
-        while self.location < self.string.count {
-            let currentChar = self.string[self.location]
-            if charSet.contains(currentChar) {
-                break
-            }
-            scannedCharacters.append(currentChar)
-            self.location += 1
-        }
-
-        return scannedCharacters.isEmpty && self.location == initialLocation ? nil : scannedCharacters
-    }
+    var location = 0
 
     /// Scans characters that ARE in the provided set (like original Scanner's scanUpTo/scan(characterSet:))
     @discardableResult func scanCharacters(in charSet: CustomCharacterSet) -> String? {
@@ -116,22 +30,6 @@ class Scanner {
             return nil
         }
         return characters
-    }
-
-    @discardableResult func scan(characterSet: CustomCharacterSet) -> Character? {
-        guard self.location < self.string.count else { return nil }
-        let character = self.string[self.location]
-        guard characterSet.contains(character) else { return nil }
-        self.location += 1
-        return character
-    }
-
-    @discardableResult func scan(characterSet: CustomCharacterSet) -> String? {
-        var characters = String()
-        while let character: Character = self.scan(characterSet: characterSet) {
-            characters.append(character)
-        }
-        return characters.isEmpty ? nil : characters
     }
 
     // MARK: - Specific Character and String Scanning
@@ -162,38 +60,13 @@ class Scanner {
         }
 
         // If we scanned the whole string, it's a match.
-        return characters.count == string.count ? characters : { self.location = savepoint; return nil }()
-    }
-
-    func scan(token: String, options: NSString.CompareOptions = []) -> String? {
-        self.scanWhitespaces()
-        return self.scan(string: token, options: options)
-    }
-
-    func scan(strings: [String], options: NSString.CompareOptions = []) -> String? {
-        for stringEntry in strings {
-            if let scannedString = self.scan(string: stringEntry, options: options) {
-                return scannedString
-            }
-        }
-        return nil
-    }
-
-    func scan(tokens: [String], options: NSString.CompareOptions = []) -> String? {
-        self.scanWhitespaces()
-        return self.scan(strings: tokens, options: options)
+        return characters
     }
 
     // MARK: - Integer Scanning
 
     func scanSign() -> Int? {
         self.scan(dictionary: ["+": 1, "-": -1])
-    }
-
-    func scanUnsignedInteger<T: UnsignedInteger>() -> T? {
-        self.scanWhitespaces()
-        guard let digitString = self.scanDigits() else { return nil }
-        return self.integerValue(from: digitString)
     }
 
     func scanInteger<T: SignedInteger>() -> T? {
@@ -283,49 +156,6 @@ class Scanner {
         return nil
     }
 
-    func scanHexadecimalInteger<T: UnsignedInteger>() -> T? {
-        let initialLoc = self.location
-        let hexCharSet = CustomCharacterSet(charactersInString: Self.characterSets.hexDigits)
-
-        var value: T = 0
-        var digitCount = 0
-
-        while let char: Character = scan(characterSet: hexCharSet),
-              let digit = Self.hexValues[char]
-        {
-            value = value * 16 + T(digit)
-            digitCount += 1
-        }
-
-        if digitCount == 0 {
-            self.location = initialLoc // Revert if nothing was scanned
-            return nil
-        }
-
-        return value
-    }
-
-    func scanIdentifier() -> String? {
-        self.scanWhitespaces()
-        let savepoint = self.location
-
-        // Scan first character (must be letter or underscore)
-        guard let firstChar: Character = scan(characterSet: Self.identifierFirstCharSet) else {
-            self.location = savepoint
-            return nil
-        }
-
-        // Begin with the first character
-        var identifier = String(firstChar)
-
-        // Scan remaining characters (can include digits)
-        while let nextChar: Character = scan(characterSet: Self.identifierFollowingCharSet) {
-            identifier.append(nextChar)
-        }
-
-        return identifier
-    }
-
     // MARK: - Whitespace Scanning
 
     func scanWhitespaces() {
@@ -344,22 +174,6 @@ class Scanner {
 
     // MARK: Private
 
-    /// Mapping hex characters to their integer values
-    private static let hexValues: [Character: Int] = [
-        "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9,
-        "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15,
-        "A": 10, "B": 11, "C": 12, "D": 13, "E": 14, "F": 15,
-    ]
-
-    // MARK: - Identifier Scanning
-
-    /// Character sets for identifier scanning
-    private static let characterSets = (
-        lowercaseLetters: "abcdefghijklmnopqrstuvwxyz",
-        uppercaseLetters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-        digits: "0123456789",
-        hexDigits: "0123456789abcdefABCDEF")
-
     /// Private helper that scans and returns a string of digits
     private func scanDigits() -> String? {
         self.scanCharacters(in: .decimalDigits)
@@ -370,20 +184,5 @@ class Scanner {
         digitString.reduce(T(0)) { result, char in
             result * base + T(Int(String(char))!)
         }
-    }
-
-    /// Helper function for power calculation with FloatingPoint types
-    private func scannerPower<T: FloatingPoint>(base: T, exponent: Int) -> T {
-        if exponent == 0 {
-            return T(1)
-        }
-        if exponent < 0 {
-            return T(1) / self.scannerPower(base: base, exponent: -exponent)
-        }
-        var result = T(1)
-        for _ in 0..<exponent {
-            result *= base
-        }
-        return result
     }
 }

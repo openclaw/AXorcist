@@ -28,7 +28,7 @@ AXorcist enables developers to create sophisticated automation tools, testing fr
 
 ---
 
-*This document provides a comprehensive overview of all AXorcist classes and their usage patterns. For interactive API documentation, run `../view-docs.sh` to open the DocC archives.*
+The examples below cover the Swift API and CLI. In Xcode, use **Product → Build Documentation** to browse the DocC reference.
 
 ## Core Classes Reference
 
@@ -731,8 +731,8 @@ Existing invocations such as `axorc --stdin` and `axorc '{...}'` remain supporte
 - **AXorcist** - Main orchestrator class
 - **Element** - Wrapper around AXUIElement with convenience methods
 - **ElementSearch** - Tree traversal and matching engine
-- **AXElementMatcher** - Criteria matching logic
-- **PathNavigator** - Hierarchical navigation
+- **Criterion matching functions** - Attribute and string comparison
+- **Path navigation functions** - Hierarchical and JSON path resolution
 - **AXObserverCenter** - Notification management
 
 ### Thread Safety
@@ -796,11 +796,8 @@ AXorcist is released under the MIT License. See [LICENSE](LICENSE) for details.
 
 Please follow the main Peekaboo contributing guidelines and open pull requests against this repository when proposing AXorcist changes.
 
-## Coverage
+## Development checks
 
-| Date       | Command                                                                                           | Scope                            | Line Coverage |
-| ---------- | ------------------------------------------------------------------------------------------------- | -------------------------------- | ------------- |
-| 2025-11-13 | `swift test --package-path AXorcist --enable-code-coverage --filter AXorcistTests.PingIntegrationTests` | Ping integration suite only      | 2.39 %        |
-| 2025-11-12 | `swift test --package-path AXorcist --enable-code-coverage --filter AXorcistTests.PingIntegrationTests` | Ping integration suite only      | 2.39 %        |
+Run `swift test` for the safe suites and `make check` for formatting, linting, native API policy, dependency resolution, and packaging-mode checks. CI uses the tool versions pinned in `.github/workflows/ci.yml` and `scripts/install-validation-tools.sh`.
 
-> Only the `PingIntegrationTests` subset currently runs in this headless environment; the automation-tagged suites require interactive UI access. Coverage is produced with `xcrun llvm-cov report AXorcist/.build/debug/axPackagePackageTests.xctest/Contents/MacOS/axPackagePackageTests -instr-profile AXorcist/.build/debug/codecov/default.profdata`.
+Automation suites are opt-in (`RUN_AUTOMATION_TESTS=true swift test`) and require Accessibility permission and an interactive desktop. They launch and manipulate TextEdit; use a disposable account or VM. Generate coverage for the selected suites with `swift test --enable-code-coverage`.

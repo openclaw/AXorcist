@@ -1,23 +1,21 @@
 // swift-tools-version: 6.2
-// The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let approachableConcurrencySettings: [SwiftSetting] = [
-    .enableExperimentalFeature("StrictConcurrency"),
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
     .defaultIsolation(MainActor.self),
 ]
 
 let package = Package(
-    name: "axPackage", // Renamed package slightly to avoid any confusion with executable name
+    name: "axPackage",
     platforms: [
         .macOS(.v14),
     ],
     products: [
-        .library(name: "AXorcist", targets: ["AXorcist"]), // Product 'AXorcist' now comes from target 'AXorcist'
-        .executable(name: "axorc", targets: ["axorc"]), // Product 'axorc' comes from target 'axorc'
+        .library(name: "AXorcist", targets: ["AXorcist"]),
+        .executable(name: "axorc", targets: ["axorc"]),
     ],
     dependencies: [
         .package(url: "https://github.com/steipete/Commander.git", exact: "0.2.4"),
@@ -27,37 +25,30 @@ let package = Package(
         .target(
             name: "AXorcist",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"), // Added Logging product from swift-log
+                .product(name: "Logging", package: "swift-log"),
             ],
-            path: "Sources/AXorcist", // Be very direct about the source path
-            exclude: [], // Explicitly no excludes
-            sources: nil, // Explicitly let SPM find all sources in the path
             swiftSettings: approachableConcurrencySettings
         ),
         .executableTarget(
-            name: "axorc", // Executable target name
+            name: "axorc",
             dependencies: [
-                "AXorcist", // Dependency restored to AXorcist
+                "AXorcist",
                 .product(name: "Commander", package: "Commander"),
             ],
-            path: "Sources/axorc", // Explicit path
             swiftSettings: approachableConcurrencySettings
         ),
         .testTarget(
             name: "AXorcistTests",
             dependencies: [
-                "AXorcist", // Dependency restored to AXorcist
+                "AXorcist",
                 "axorc",
                 .product(name: "Logging", package: "swift-log"),
             ],
-            path: "Tests/AXorcistTests", // Explicit path
             swiftSettings: approachableConcurrencySettings
-            // Sources will be inferred by SPM
         ),
         .testTarget(
             name: "AXorcistCommandConversionTests",
             dependencies: ["AXorcist", "axorc"],
-            path: "Tests/AXorcistCommandConversionTests",
             swiftSettings: approachableConcurrencySettings
         ),
     ],
