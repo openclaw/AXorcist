@@ -816,6 +816,6 @@ Please follow the main Peekaboo contributing guidelines and open pull requests a
 
 Run `swift test` for the safe suites and `make check` for formatting, linting, native API policy, dependency resolution, and packaging-mode checks. CI uses the tool versions pinned in `.github/workflows/ci.yml` and `scripts/install-validation-tools.sh`.
 
-CI tests Swift 6.2.4 with Xcode 16.4 and Swift 6.3.3 with Xcode 26.3. Formatting, dependency-fixture and universal-packaging checks run once on the minimum-toolchain job. The repository's CodeQL workflow builds the Swift library and CLI directly with the minimum toolchain and also scans Python and Actions; it replaces GitHub's default setup.
+CI tests Swift 6.2.4 with Xcode 16.4 on macOS 15 and Swift 6.3.3 with Xcode 26.6 on macOS 26. Formatting, dependency-fixture and universal-packaging checks run once on the minimum-toolchain job. The repository's CodeQL workflow builds the Swift library and CLI directly with the minimum toolchain and also scans Python and Actions; it replaces GitHub's default setup.
 
 Automation suites are opt-in (`RUN_AUTOMATION_TESTS=true swift test`) and require Accessibility permission and an interactive desktop. They launch and manipulate TextEdit; use a disposable account or VM. Generate coverage for the selected suites with `swift test --enable-code-coverage`.

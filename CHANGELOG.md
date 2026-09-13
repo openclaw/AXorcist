@@ -16,6 +16,7 @@ All notable changes to AXorcist will be documented in this file.
 - Restore global log snapshots and complete CLI debug logs, preserve entry identity, and reset severity-aware duplicate tracking when history is cleared.
 
 ### Changed
+- Update the latest-toolchain CI job to Xcode 26.6 on macOS 26 while retaining Swift 6.2 and macOS 14 compatibility coverage.
 - Update swift-log to 1.15.1 for upstream logging fixes.
 - Validate Swift 6.2.4 and 6.3.3 with pinned Actions and SwiftFormat 0.63.0, and build CodeQL directly while retaining the Swift 6.2 and macOS 14 minimums.
 

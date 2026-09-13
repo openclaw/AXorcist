@@ -23,7 +23,7 @@ permissions:
 jobs:
   build-and-lint:
     name: Swift ${{ matrix.swift }}
-    runs-on: macos-15
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -31,9 +31,11 @@ jobs:
         include:
           - swift: "6.2.4"
             xcode: "16.4"
+            runner: macos-15
             validate: true
           - swift: "6.3.3"
-            xcode: "26.3"
+            xcode: "26.6"
+            runner: macos-26
             validate: false
 
     steps:
