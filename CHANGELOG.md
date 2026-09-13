@@ -8,9 +8,9 @@ All notable changes to AXorcist will be documented in this file.
 - Refuse element-scoped clearing when native focus cannot be established, sharing the typing preflight before posting keyboard input.
 - Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
 - Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
+- Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
 - Parse signed integer bounds without trapping, return failure for overflow, and scan long geometry/range inputs with a forward-only string cursor.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
-- Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
 
 ### Changed
 - Update swift-log to 1.15.1 for upstream logging fixes.
