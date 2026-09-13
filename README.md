@@ -497,6 +497,8 @@ may need focus:
 The published `performAction` spelling with `"action_name": "AXSetValue"` remains a compatibility alias. It requires
 a string `action_value` and writes `AXValue` directly without invoking an accessibility action or changing focus.
 
+The instance methods `element.typeText(...)` and `element.clearField()` establish native focus before posting keyboard input and throw if focus cannot be established. Clearing as part of `typeText(..., clearFirst: true)` uses the same preflight.
+
 ## Notifications and Observing
 
 Monitor UI changes with these notifications:

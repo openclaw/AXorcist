@@ -11,13 +11,10 @@ extension Element {
             text,
             delay: delay,
             clearFirst: clearFirst,
-            ensureFocus: {
-                self.attribute(Attribute<Bool>.focused) == true ||
-                    self.setValue(true, forAttribute: Attribute<Bool>.focused.rawValue)
-            },
+            ensureFocus: self.focusForTextInput,
             eventDispatcher: { text, delay, clearFirst in
                 if clearFirst {
-                    try self.clearField()
+                    try Element.clearFocusedField()
                 }
                 try Element.typeText(text, delay: delay)
             })
@@ -31,19 +28,39 @@ extension Element {
         ensureFocus: () -> Bool,
         eventDispatcher: (String, TimeInterval, Bool) throws -> Void) throws
     {
-        guard ensureFocus() else {
-            throw ElementTypingError.focusFailed
+        try Self.performFocusedInput(ensureFocus: ensureFocus) {
+            try eventDispatcher(text, delay, clearFirst)
         }
-        try eventDispatcher(text, delay, clearFirst)
     }
 
     /// Clear the text field
     @MainActor public func clearField() throws {
-        // Select all with Cmd+A
+        try self.clearField(
+            ensureFocus: self.focusForTextInput,
+            performClear: { try Element.clearFocusedField() })
+    }
+
+    @MainActor
+    func clearField(ensureFocus: () -> Bool, performClear: () throws -> Void) throws {
+        try Self.performFocusedInput(ensureFocus: ensureFocus, action: performClear)
+    }
+
+    @MainActor
+    private func focusForTextInput() -> Bool {
+        self.attribute(Attribute<Bool>.focused) == true ||
+            self.setValue(true, forAttribute: Attribute<Bool>.focused.rawValue)
+    }
+
+    @MainActor
+    private static func performFocusedInput(ensureFocus: () -> Bool, action: () throws -> Void) throws {
+        guard ensureFocus() else { throw ElementTypingError.focusFailed }
+        try action()
+    }
+
+    @MainActor
+    private static func clearFocusedField() throws {
         try Element.performHotkey(keys: ["cmd", "a"])
         Thread.sleep(forTimeInterval: 0.05)
-
-        // Delete
         try Element.typeKey(.delete)
     }
 

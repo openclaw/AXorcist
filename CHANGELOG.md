@@ -5,6 +5,7 @@ All notable changes to AXorcist will be documented in this file.
 ## Unreleased
 
 ### Fixed
+- Refuse element-scoped clearing when native focus cannot be established, sharing the typing preflight before posting keyboard input.
 - Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
 - Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
