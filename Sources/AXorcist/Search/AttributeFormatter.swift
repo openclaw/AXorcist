@@ -29,16 +29,10 @@ func formatChildrenAttribute(
         return .null
     }
 
-    if outputFormat == .textContent {
-        var childrenSummaries: [String] = []
-        for childElement in actualChildren {
-            childrenSummaries.append(childElement.briefDescription(option: valueFormatOption))
-        }
-        return .string("[\(childrenSummaries.joined(separator: ", "))]")
-    } else {
-        let childrenDescriptions = actualChildren.map { $0.briefDescription(option: valueFormatOption) }
-        return .array(childrenDescriptions.map { .string($0) })
-    }
+    let descriptions = actualChildren.map { $0.briefDescription(option: valueFormatOption) }
+    return outputFormat == .textContent
+        ? .string("[\(descriptions.joined(separator: ", "))]")
+        : .array(descriptions.map { .string($0) })
 }
 
 /// Helper function to format the focused UI element attribute
@@ -50,7 +44,8 @@ func formatFocusedUIElementAttribute(
 {
     guard let actualFocusedElement = focusedElement else { return .null }
     if outputFormat == .textContent {
-        return .string("Element: \(actualFocusedElement.role() ?? "?Role")")
+        return .string(
+            "Focused: \(actualFocusedElement.role() ?? "?Role") - \(actualFocusedElement.title() ?? "?Title")")
     } else {
         return .string(actualFocusedElement.briefDescription(option: valueFormatOption))
     }

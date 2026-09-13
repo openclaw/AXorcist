@@ -10,6 +10,7 @@ All notable changes to AXorcist will be documented in this file.
 - Reject unconvertible commands in nested batches before execution instead of silently dropping them.
 - Keep encoding-error responses valid JSON for command IDs containing quotes, backslashes, or newlines.
 - Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
+- Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
 - Parse signed integer bounds without trapping, return failure for overflow, and scan long geometry/range inputs with a forward-only string cursor.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
 
