@@ -108,6 +108,8 @@ let parent = element.parent()
 
 JSON encoding preserves numeric attribute values as numbers, including `0` and `1`; Boolean attributes remain `true` or `false`. `AnyCodable` decodes unsigned integers above `Int.max` as `UInt64` to retain their exact value. The value-formatting helpers display geometry and text ranges using their native types.
 
+Integer text in geometry/range parsing accepts the full signed range, including `Int.min`. Overflow and malformed signs fail parsing without advancing the numeric cursor.
+
 ### AXPermissionHelpers
 
 Modern async/await API for accessibility permissions.

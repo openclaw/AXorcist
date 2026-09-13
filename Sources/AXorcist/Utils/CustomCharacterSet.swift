@@ -9,7 +9,7 @@ public struct CustomCharacterSet {
     }
 
     public init(charactersInString: String) {
-        self.characters = Set(Array(charactersInString))
+        self.characters = Set(charactersInString)
     }
 
     // MARK: Public
