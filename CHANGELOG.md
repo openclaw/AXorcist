@@ -2,18 +2,18 @@
 
 All notable changes to AXorcist will be documented in this file.
 
-## Unreleased
+## [0.1.10] - 2026-09-13
 
 ### Fixed
 - Refuse element-scoped clearing when native focus cannot be established, sharing the typing preflight before posting keyboard input.
-- Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
 - Reject unconvertible commands in nested batches before execution instead of silently dropping them.
 - Keep encoding-error responses valid JSON for command IDs containing quotes, backslashes, or newlines.
 - Preserve boxed numeric 0 and 1 as numbers and retain large unsigned JSON integers exactly in AnyCodable.
-- Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
-- Parse signed integer bounds without trapping, return failure for overflow, and scan long geometry/range inputs with a forward-only string cursor.
 - Render actual element descriptions and array contents in value formatting instead of literal Swift interpolation text.
 - Restore global log snapshots and complete CLI debug logs, preserve entry identity, and reset severity-aware duplicate tracking when history is cleared.
+- Honor requested value formats for hierarchy descriptions and native-value text output through one formatting path.
+- Parse signed integer bounds without trapping, return failure for overflow, and scan long geometry/range inputs with a forward-only string cursor.
+- Format native CFRange values through typed accessors, preventing range payloads from being read into Boolean-sized storage.
 
 ### Changed
 - Update the latest-toolchain CI job to Xcode 26.6 on macOS 26 while retaining Swift 6.2 and macOS 14 compatibility coverage.

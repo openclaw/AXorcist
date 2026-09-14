@@ -184,7 +184,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/openclaw/AXorcist.git", from: "0.1.9")
+    .package(url: "https://github.com/openclaw/AXorcist.git", from: "0.1.10")
 ]
 ```
 
