@@ -7,6 +7,7 @@ All notable changes to AXorcist will be documented in this file.
 ### Fixed
 - Preserve numeric `NSNumber` values such as 0 and 1 when setting native accessibility attributes instead of converting them to Booleans.
 - Parse complete floating-point tokens without intermediate exponent scaling, preserving subnormal values and signed zero and consuming exponents beyond integer bounds.
+- Reject nonfinite or overflowing scroll deltas, amounts that native event fields would wrap, and negative smooth-scroll counts with an error before posting input instead of trapping or reversing direction.
 
 ## [0.1.10] - 2026-09-13
 

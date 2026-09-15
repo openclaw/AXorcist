@@ -170,20 +170,41 @@ public enum InputDriver {
         deltaY: Double,
         at point: CGPoint? = nil) throws
     {
+        let event = try self.scrollEvent(deltaX: deltaX, deltaY: deltaY, at: point)
+        event.post(tap: .cghidEventTap)
+    }
+
+    @MainActor
+    static func scrollEvent(
+        deltaX: Double = 0,
+        deltaY: Double,
+        at point: CGPoint? = nil) throws -> CGEvent
+    {
         let pixelsPerLine: Double = 10
+        guard let vertical = Int32(exactly: (deltaY / pixelsPerLine).rounded(.towardZero)),
+              let horizontal = Int32(exactly: (deltaX / pixelsPerLine).rounded(.towardZero))
+        else {
+            throw UIAutomationError.invalidScrollAmount
+        }
         let scrollEvent = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .line,
             wheelCount: 2,
-            wheel1: Int32(deltaY / pixelsPerLine),
-            wheel2: Int32(deltaX / pixelsPerLine),
+            wheel1: vertical,
+            wheel2: horizontal,
             wheel3: 0)
 
         guard let event = scrollEvent else { throw UIAutomationError.failedToCreateEvent }
+        // Native scroll fields can wrap even when the constructor's Int32 arguments are representable.
+        guard event.getIntegerValueField(.scrollWheelEventDeltaAxis1) == Int64(vertical),
+              event.getIntegerValueField(.scrollWheelEventDeltaAxis2) == Int64(horizontal)
+        else {
+            throw UIAutomationError.invalidScrollAmount
+        }
         if let point {
             event.location = point
         }
-        event.post(tap: .cghidEventTap)
+        return event
     }
 
     // MARK: - Keyboard

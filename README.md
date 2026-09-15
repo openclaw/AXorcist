@@ -476,6 +476,8 @@ Recursively collect all elements.
 
 ## Actions
 
+Swift scrolling helpers throw `UIAutomationError.invalidScrollAmount` before posting an event for invalid inputs. `InputDriver.scroll` requires finite deltas whose line counts (division by 10, truncated toward zero) fit the native event fields. `Element.scrollAt` requires a representable signed amount for nonsmooth scrolling and a nonnegative step count for smooth scrolling; a zero smooth count is a no-op. Both helpers verify the native event retains the requested delta, rejecting values that macOS would silently wrap. Representable signed nonsmooth amounts retain their existing direction behavior.
+
 Available actions to perform on elements:
 
 - **AXPress** - Click/activate an element
