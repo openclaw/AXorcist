@@ -196,39 +196,15 @@ extension Element {
         amount: Int = 3,
         smooth: Bool = false) throws
     {
+        guard !smooth || amount >= 0 else {
+            throw UIAutomationError.invalidScrollAmount
+        }
         let scrollAmount = smooth ? 1 : amount
         let iterations = smooth ? amount : 1
         let delay = smooth ? 0.01 : 0.05
 
         for _ in 0..<iterations {
-            // Create scroll event
-            guard let scrollEvent = CGEvent(
-                scrollWheelEvent2Source: nil,
-                units: .pixel,
-                wheelCount: 2,
-                wheel1: direction == .up || direction == .down ? Int32(scrollAmount) : 0,
-                wheel2: direction == .left || direction == .right ? Int32(scrollAmount) : 0,
-                wheel3: 0)
-            else {
-                throw UIAutomationError.failedToCreateEvent
-            }
-
-            // Set scroll direction
-            switch direction {
-            case .up:
-                scrollEvent.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: Int64(scrollAmount))
-            case .down:
-                scrollEvent.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -Int64(scrollAmount))
-            case .left:
-                scrollEvent.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: Int64(scrollAmount))
-            case .right:
-                scrollEvent.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: -Int64(scrollAmount))
-            }
-
-            // Set location
-            scrollEvent.location = point
-
-            // Post event
+            let scrollEvent = try self.scrollEvent(at: point, direction: direction, amount: scrollAmount)
             scrollEvent.post(tap: .cghidEventTap)
 
             // Delay between scrolls
@@ -236,5 +212,32 @@ extension Element {
                 Thread.sleep(forTimeInterval: delay)
             }
         }
+    }
+
+    @MainActor
+    static func scrollEvent(at point: CGPoint, direction: ScrollDirection, amount: Int) throws -> CGEvent {
+        guard let scrollAmount = Int32(exactly: amount) else {
+            throw UIAutomationError.invalidScrollAmount
+        }
+        let vertical = direction == .up || direction == .down
+        guard let event = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .pixel,
+            wheelCount: 2,
+            wheel1: vertical ? scrollAmount : 0,
+            wheel2: vertical ? 0 : scrollAmount,
+            wheel3: 0)
+        else {
+            throw UIAutomationError.failedToCreateEvent
+        }
+
+        let field: CGEventField = vertical ? .scrollWheelEventDeltaAxis1 : .scrollWheelEventDeltaAxis2
+        let delta = direction == .down || direction == .right ? -Int64(scrollAmount) : Int64(scrollAmount)
+        event.setIntegerValueField(field, value: delta)
+        guard event.getIntegerValueField(field) == delta else {
+            throw UIAutomationError.invalidScrollAmount
+        }
+        event.location = point
+        return event
     }
 }
