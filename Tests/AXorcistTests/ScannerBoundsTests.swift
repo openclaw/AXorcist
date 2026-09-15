@@ -44,6 +44,18 @@ struct ScannerBoundsTests {
     }
 
     @Test
+    func `floating point conversion preserves representable exponent extremes`() throws {
+        for input in ["1e-320", "5e-324", "0e999", "-0e999", "1.7976931348623157e308", "1e-999999999999999999999"] {
+            let expected = try #require(Double(input))
+            let scanner = Scanner(string: input + " tail")
+            let actual = try #require(scanner.scanDouble())
+            #expect(actual == expected)
+            #expect(actual.sign == expected.sign)
+            #expect(String(scanner.string[scanner.location...]) == " tail")
+        }
+    }
+
+    @Test
     func `floating point scanning keeps its boundaries`() {
         let fixtures: [(String, Double, String)] = [
             (".5 tail", 0.5, " tail"),

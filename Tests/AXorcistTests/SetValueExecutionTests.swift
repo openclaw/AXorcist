@@ -35,6 +35,27 @@ struct SetValueExecutionTests {
     }
 
     @Test
+    func `native setter preserves numeric and boolean CF types`() throws {
+        let element = Element(AXUIElementCreateSystemWide())
+        let fixtures: [Any] = [
+            NSNumber(value: 0), NSNumber(value: 1), NSNumber(value: 1.0),
+            NSNumber(value: UInt64.max), NSNumber(value: false), NSNumber(value: true),
+            0, 1, 1.0, false, true,
+        ]
+        for source in fixtures {
+            let expected = try #require(source as? NSNumber)
+            var invocationCount = 0
+            try element.setAttributeValue(source, forAttribute: AXAttributeNames.kAXValueAttribute) { _, _, value in
+                invocationCount += 1
+                #expect(CFGetTypeID(value) == CFGetTypeID(expected))
+                #expect(CFEqual(value, expected))
+                return .success
+            }
+            #expect(invocationCount == 1)
+        }
+    }
+
+    @Test
     func `canonical value owner preserves native AX errors`() {
         let element = Element(AXUIElementCreateSystemWide())
 

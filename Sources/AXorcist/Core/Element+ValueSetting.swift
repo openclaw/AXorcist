@@ -58,9 +58,7 @@ extension Element {
         if let string = value as? String {
             return string as CFString
         }
-        if let bool = value as? Bool {
-            return CFConstants.cfBoolean(from: bool)
-        }
+        // Bridge numbers before Bool: NSNumber(0/1) also conditionally casts to Bool.
         if let number = value as? NSNumber {
             return number
         }

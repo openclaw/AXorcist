@@ -112,6 +112,8 @@ JSON encoding preserves numeric attribute values as numbers, including `0` and `
 
 Integer text in geometry/range parsing accepts the full signed range, including `Int.min`. Overflow and malformed signs fail parsing without advancing the numeric cursor.
 
+Floating-point scanning converts complete scientific-notation tokens, retaining representable subnormal values and signed zero. Native attribute setters preserve numeric `NSNumber` values, including `0` and `1`, as CFNumber values; Boolean inputs remain CFBoolean values.
+
 ### AXPermissionHelpers
 
 Modern async/await API for accessibility permissions.

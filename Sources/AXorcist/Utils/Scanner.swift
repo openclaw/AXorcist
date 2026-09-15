@@ -65,24 +65,20 @@ class Scanner {
         let initialLocation = self.location
 
         // Parse sign
-        let sign: Double = (scan(character: "-") != nil) ? -1.0 : { _ = self.scan(character: "+"); return 1.0 }()
-
-        // Buffer to build the numeric string
-        var numberStr = ""
+        if self.scan(character: "-") == nil {
+            self.scan(character: "+")
+        }
         var hasDigits = false
 
         // Parse integer part
-        if let digits = scanCharacters(in: .decimalDigits) {
-            numberStr += digits
+        if self.scanCharacters(in: .decimalDigits) != nil {
             hasDigits = true
         }
 
         // Parse fractional part
         let dotLocation = self.location
         if self.scan(character: ".") != nil {
-            if let fractionDigits = scanCharacters(in: .decimalDigits) {
-                numberStr += "."
-                numberStr += fractionDigits
+            if self.scanCharacters(in: .decimalDigits) != nil {
                 hasDigits = true
             } else {
                 // Revert dot scan if not followed by digits
@@ -97,25 +93,19 @@ class Scanner {
         }
 
         // Parse exponent
-        var exponent = 0
         let expLocation = self.location
         if self.scan(character: "e", options: .caseInsensitive) != nil {
-            let expSign: Double = (scan(character: "-") != nil) ? -1.0 : { _ = self.scan(character: "+"); return 1.0 }()
-
-            if let expDigits = scanCharacters(in: .decimalDigits), let expValue = Int(expDigits) {
-                exponent = Int(expSign) * expValue
-            } else {
+            if self.scan(character: "-") == nil {
+                self.scan(character: "+")
+            }
+            if self.scanCharacters(in: .decimalDigits) == nil {
                 // Revert exponent scan if not followed by valid digits
                 self.location = expLocation
             }
         }
 
-        // Convert to final double value
-        if var value = Double(numberStr) {
-            value *= sign
-            if exponent != 0 {
-                value *= pow(10.0, Double(exponent))
-            }
+        // Convert the complete token once; separate exponent scaling can underflow or produce NaN for zero.
+        if let value = Double(self.string[initialLocation..<self.location]) {
             return value
         }
 
