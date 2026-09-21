@@ -1,8 +1,8 @@
 # Releasing `axorc`
 
-The Homebrew formula consumes a Developer ID-signed universal binary. Do not publish the ad-hoc artifact produced by `--adhoc`; a stable signature keeps the macOS Accessibility identity consistent across upgrades.
+The Homebrew formula consumes a Developer ID-signed binary for the host architecture, or the universal binary for older releases. Do not publish the ad-hoc artifact produced by `--adhoc`; a stable signature keeps the macOS Accessibility identity consistent across upgrades.
 
-Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archives for Apple Silicon and Intel Macs. Each contains only `axorc`, extracted from the signed universal binary without changing its signature. The universal archive and Homebrew formula remain available for both architectures.
+Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archives for Apple Silicon and Intel Macs. Each contains only `axorc`, extracted from the signed universal binary without changing its signature. The universal archive remains available for both architectures.
 
 `scripts/build-universal-binary.sh` restores executable mode `0755` after stripping and signing, regardless of the caller's umask. The release archive preserves that mode. Run `make test-universal-binary-mode` for the source-only permission regression; it mocks build/signing tools and does not replace native signature or archive verification.
 
@@ -28,13 +28,15 @@ Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archive
    ```
 
    `spctl --assess --type execute` is an app assessment and can reject valid standalone executables as not being apps. Follow Apple's [Testing a Notarised Product](https://developer.apple.com/forums/thread/130560) guidance for other code, and also test the actual install and launch on a fresh Mac or VM. Keep networking enabled because the zip cannot carry a stapled ticket.
-3. Render the formula with the public universal artifact checksum:
+3. Render the formula from the directory containing the public archives and checksum files verified above:
 
    ```bash
-   scripts/render-homebrew-formula.sh 0.1.11 <sha256> > axorc.rb
+   scripts/render-homebrew-formula.sh 0.1.11 --artifacts <verified-directory> > axorc.rb
    ```
 
-4. Add `axorc.rb` to `openclaw/homebrew-tap`, then run `brew audit --strict axorc`, `brew install --build-from-source ./axorc.rb`, `axorc --version`, `axorc --help`, and `axorc permissions` on a clean host.
+   The renderer checks each checksum against its archive and selects thin downloads only when both architecture pairs are present. An incomplete set fails. A directory with only the universal pair, or the existing `scripts/render-homebrew-formula.sh 0.1.10 <sha256>` invocation, renders a universal formula for older releases. Rendering does not replace the signature and notarization checks above or publish anything.
+
+4. Add `axorc.rb` to `openclaw/homebrew-tap`, then run `brew audit --strict openclaw/tap/axorc`, `brew install --build-from-source openclaw/tap/axorc`, `brew test openclaw/tap/axorc`, `axorc --version`, `axorc --help`, and `axorc permissions` on a clean host for each architecture.
 5. Confirm Homebrew preserved the published executable byte-for-byte and retained its Developer ID requirement:
 
    ```bash

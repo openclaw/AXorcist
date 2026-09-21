@@ -97,8 +97,6 @@ jobs:
             "$binary" --help >/dev/null
           fi
         done
-        archive="dist/axorc-$version-macos-universal.zip"
-        sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
-        scripts/render-homebrew-formula.sh "$version" "$sha256" > /tmp/axorc.rb
+        scripts/render-homebrew-formula.sh "$version" --artifacts dist > /tmp/axorc.rb
         grep -Fq 'skip_clean "bin/axorc"' /tmp/axorc.rb
         ruby -c /tmp/axorc.rb
