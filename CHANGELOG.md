@@ -2,7 +2,10 @@
 
 All notable changes to AXorcist will be documented in this file.
 
-## Unreleased
+## [0.1.11] - 2026-09-20
+
+### Highlights
+- Preserve native numeric values and floating-point edge cases, and reject invalid scrolling input before dispatch.
 
 ### Fixed
 - Preserve numeric `NSNumber` values such as 0 and 1 when setting native accessibility attributes instead of converting them to Booleans.
