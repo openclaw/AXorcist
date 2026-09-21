@@ -73,5 +73,5 @@ fi
 chmod 0755 "$output_path"
 
 codesign --verify --strict --verbose=2 "$output_path"
-file "$output_path" | grep -q 'universal binary'
+lipo "$output_path" -verify_arch arm64 x86_64
 echo "Created universal binary $output_path"
