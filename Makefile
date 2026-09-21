@@ -57,8 +57,12 @@ test-commander-dependency:
 test-universal-binary-mode:
 	@bash scripts/test-universal-binary-mode.sh
 
-# Run formatting, linting, native-only policy, dependency, and binary-mode checks
-check: format-check lint native-only test-commander-dependency test-universal-binary-mode
+.PHONY: test-homebrew-formula
+test-homebrew-formula:
+	python3 scripts/test-homebrew-formula.py
+
+# Run formatting, linting, native-only policy, dependency, and packaging checks
+check: format-check lint native-only test-commander-dependency test-universal-binary-mode test-homebrew-formula
 	@echo "All code checks complete."
 
 # Default target
