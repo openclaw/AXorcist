@@ -55,7 +55,7 @@ else
 fi
 
 if [[ -n "${arm_sha256:-}" ]]; then
-  printf -v downloads '  on_arm do\n    url "https://github.com/openclaw/AXorcist/releases/download/v@VERSION@/axorc-@VERSION@-macos-arm64.zip"\n    sha256 "%s"\n  end\n  on_intel do\n    url "https://github.com/openclaw/AXorcist/releases/download/v@VERSION@/axorc-@VERSION@-macos-x86_64.zip"\n    sha256 "%s"\n  end' "$arm_sha256" "$intel_sha256"
+  printf -v downloads '  url on_arch_conditional(\n    arm: "https://github.com/openclaw/AXorcist/releases/download/v@VERSION@/axorc-@VERSION@-macos-arm64.zip",\n    intel: "https://github.com/openclaw/AXorcist/releases/download/v@VERSION@/axorc-@VERSION@-macos-x86_64.zip",\n  )\n  sha256 on_arch_conditional(\n    arm: "%s",\n    intel: "%s",\n  )' "$arm_sha256" "$intel_sha256"
 else
   printf -v downloads '  url "https://github.com/openclaw/AXorcist/releases/download/v@VERSION@/axorc-@VERSION@-macos-universal.zip"\n  sha256 "%s"' "$sha256"
 fi
