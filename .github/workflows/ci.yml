@@ -73,10 +73,31 @@ jobs:
       run: |
         shellcheck scripts/*.sh
         version="$(sed -n 's/.*axorcVersion = "\([^"]*\)".*/\1/p' Sources/axorc/Models/AXORCModels.swift)"
+        umask 077
         scripts/build-release-artifact.sh "$version" --adhoc
+        verify_dir="$(mktemp -d)"
+        trap 'rm -rf "$verify_dir"' EXIT
+        for architecture in universal arm64 x86_64; do
+          archive="dist/axorc-$version-macos-$architecture.zip"
+          test "$(unzip -Z1 "$archive")" = "axorc"
+          (cd dist && shasum -a 256 -c "$(basename "$archive").sha256")
+          mkdir "$verify_dir/$architecture"
+          ditto -x -k "$archive" "$verify_dir/$architecture"
+          binary="$verify_dir/$architecture/axorc"
+          test "$(stat -f '%Lp' "$binary")" = 755
+          codesign --verify --strict "$binary"
+          if [[ "$architecture" == universal ]]; then
+            lipo "$binary" -verify_arch arm64 x86_64
+          else
+            test "$(lipo -archs "$binary")" = "$architecture"
+            test "$(stat -f '%z' "$archive")" -lt "$(stat -f '%z' "dist/axorc-$version-macos-universal.zip")"
+          fi
+          if [[ "$architecture" == universal || "$architecture" == "$(uname -m)" ]]; then
+            "$binary" --version | grep -Fx "axorc $version"
+            "$binary" --help >/dev/null
+          fi
+        done
         archive="dist/axorc-$version-macos-universal.zip"
-        test "$(unzip -Z1 "$archive")" = "axorc"
-        (cd dist && shasum -a 256 -c "$(basename "$archive").sha256")
         sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
         scripts/render-homebrew-formula.sh "$version" "$sha256" > /tmp/axorc.rb
         grep -Fq 'skip_clean "bin/axorc"' /tmp/axorc.rb

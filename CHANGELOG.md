@@ -2,6 +2,14 @@
 
 All notable changes to AXorcist will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Add smaller arm64 and x86_64 macOS release archives alongside the existing universal archive, preserving the signed executable and Homebrew compatibility.
+
+### Fixed
+- Verify universal binary architectures directly with `lipo` so release packaging does not fail when an early-closing `grep` interrupts `file` output.
+
 ## [0.1.11] - 2026-09-20
 
 ### Highlights

@@ -2,6 +2,8 @@
 
 The Homebrew formula consumes a Developer ID-signed universal binary. Do not publish the ad-hoc artifact produced by `--adhoc`; a stable signature keeps the macOS Accessibility identity consistent across upgrades.
 
+Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archives for Apple Silicon and Intel Macs. Each contains only `axorc`, extracted from the signed universal binary without changing its signature. The universal archive and Homebrew formula remain available for both architectures.
+
 `scripts/build-universal-binary.sh` restores executable mode `0755` after stripping and signing, regardless of the caller's umask. The release archive preserves that mode. Run `make test-universal-binary-mode` for the source-only permission regression; it mocks build/signing tools and does not replace native signature or archive verification.
 
 ## Prepare
@@ -14,19 +16,19 @@ The Homebrew formula consumes a Developer ID-signed universal binary. Do not pub
    AXORC_CODESIGN_IDENTITY='Developer ID Application: ...' scripts/build-release-artifact.sh 0.1.11
    ```
 
-4. Submit `dist/axorc-0.1.11-macos-universal.zip` to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify the downloaded executable's notarization ticket online after publication.
+4. Submit each `dist/axorc-0.1.11-macos-*.zip` archive to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify each downloaded executable's notarization ticket online after publication.
 
 ## Publish and update Homebrew
 
-1. Upload the zip and `.sha256` file to the matching GitHub Release.
-2. Download the public artifact into a clean temporary directory. Verify its checksum, universal architectures, stable signature, `--version`, and `--help`. Verify the standalone executable's notarization ticket with:
+1. Upload all three zips and their `.sha256` files to the matching GitHub Release.
+2. Download each public artifact into a clean temporary directory. Verify its checksum, advertised architectures, stable signature, and executable mode. Run `--version` and `--help` on a matching host. Verify the standalone executable's notarization ticket with:
 
    ```bash
    codesign -vvvv -R="notarized" --check-notarization axorc
    ```
 
    `spctl --assess --type execute` is an app assessment and can reject valid standalone executables as not being apps. Follow Apple's [Testing a Notarised Product](https://developer.apple.com/forums/thread/130560) guidance for other code, and also test the actual install and launch on a fresh Mac or VM. Keep networking enabled because the zip cannot carry a stapled ticket.
-3. Render the formula with the public artifact checksum:
+3. Render the formula with the public universal artifact checksum:
 
    ```bash
    scripts/render-homebrew-formula.sh 0.1.11 <sha256> > axorc.rb
@@ -46,6 +48,6 @@ The Homebrew formula consumes a Developer ID-signed universal binary. Do not pub
 
 ## Close out
 
-- Confirm the GitHub Release contains the signed universal archive and checksum.
+- Confirm the GitHub Release contains the signed universal, arm64, and x86_64 archives and their checksums.
 - Confirm the Homebrew formula uses the public archive URL and exact checksum.
 - Open the next patch `Unreleased` section and commit it.
