@@ -73,5 +73,7 @@ fi
 chmod 0755 "$output_path"
 
 codesign --verify --strict --verbose=2 "$output_path"
-lipo "$output_path" -verify_arch arm64 x86_64
+for architecture in arm64 x86_64; do
+  lipo "$output_path" -verify_arch "$architecture"
+done
 echo "Created universal binary $output_path"

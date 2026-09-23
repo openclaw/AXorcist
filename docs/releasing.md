@@ -4,7 +4,7 @@ The Homebrew formula consumes a Developer ID-signed binary for the host architec
 
 Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archives for Apple Silicon and Intel Macs. Each contains only `axorc`, extracted from the signed universal binary without changing its signature. The universal archive remains available for both architectures.
 
-`scripts/build-universal-binary.sh` restores executable mode `0755` after stripping and signing, regardless of the caller's umask. The release archive preserves that mode. Run `make test-universal-binary-mode` for the source-only permission regression; it mocks build/signing tools and does not replace native signature or archive verification.
+`scripts/build-universal-binary.sh` restores executable mode `0755` after stripping and signing, regardless of the caller's umask. The release archive preserves that mode. Universal architecture checks invoke `lipo -verify_arch` once per slice for compatibility with Xcode 27. Run `make test-universal-binary-mode` for the source-only permission and argument regression; it mocks build/signing tools and does not replace native signature or archive verification.
 
 ## Prepare
 

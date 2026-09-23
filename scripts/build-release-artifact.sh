@@ -75,7 +75,9 @@ else
 fi
 
 codesign --verify --strict --verbose=2 "$binary_path"
-lipo "$binary_path" -verify_arch arm64 x86_64
+for architecture in arm64 x86_64; do
+  lipo "$binary_path" -verify_arch "$architecture"
+done
 "$binary_path" --version | grep -Fx "axorc $version"
 
 for architecture in universal arm64 x86_64; do
