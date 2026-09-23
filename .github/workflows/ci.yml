@@ -92,7 +92,9 @@ jobs:
           test "$(stat -f '%Lp' "$binary")" = 755
           codesign --verify --strict "$binary"
           if [[ "$architecture" == universal ]]; then
-            lipo "$binary" -verify_arch arm64 x86_64
+            for expected_arch in arm64 x86_64; do
+              lipo "$binary" -verify_arch "$expected_arch"
+            done
           else
             test "$(lipo -archs "$binary")" = "$architecture"
             test "$(stat -f '%z' "$archive")" -lt "$(stat -f '%z' "dist/axorc-$version-macos-universal.zip")"

@@ -34,7 +34,12 @@ case "${0##*/}" in
             printf '%s\n' "$AXORCIST_TEST_BUILD_DIR"
         fi
         ;;
-    lipo) ;;
+    lipo)
+        if [[ "$2" == -verify_arch && $# -ne 3 ]]; then
+            echo 'lipo: -verify_arch requires exactly one input file' >&2
+            exit 1
+        fi
+        ;;
     strip) narrow_mode strip "${!#}" ;;
     codesign)
         case "$1" in
@@ -81,7 +86,7 @@ for narrow_tool in strip codesign; do
             failed=1
             continue
         fi
-        mode="$(stat -f '%Lp' "$binary")"
+        mode="$(python3 -c 'import os, stat, sys; print(format(stat.S_IMODE(os.stat(sys.argv[1]).st_mode), "o"))' "$binary")"
         if [[ "$mode" != 755 ]]; then
             printf 'FAIL: %s/%s builder succeeded but output mode is %s; expected 755\n' \
                 "$narrow_tool" "$signing_mode" "$mode" >&2

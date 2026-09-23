@@ -8,7 +8,7 @@ import Foundation
 
 // MARK: - Version and Configuration
 
-nonisolated let axorcVersion = "0.1.11"
+nonisolated let axorcVersion = "0.2.0"
 
 /// Returns a human-readable build stamp (yyMMddHHmm) evaluated at runtime.
 /// Good enough for confirming we're on the binary we just built.
