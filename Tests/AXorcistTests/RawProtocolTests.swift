@@ -98,6 +98,31 @@ nonisolated struct RawProtocolTests {
         #expect(message == "JSON command array must not be empty")
     }
 
+    @Test(arguments: ["json", "stdin", "file"])
+    func `Multiple top-level commands are rejected before executing the first`(source: String) throws {
+        let payload = """
+        [{"command_id":"first","command":"ping"},{"command_id":"second","command":"ping"}]
+        """
+        let message = try self.decodeError(self.run(payload, source: source))
+        #expect(message ==
+            "JSON input must contain exactly one command; use batch with sub_commands for multiple commands")
+    }
+
+    @Test
+    func `Debug diagnostics do not dump raw input files`() throws {
+        let marker = "synthetic-private-input-marker"
+        let payload = """
+        {"command_id":"input-privacy","command":"ping","ignored":"\(marker)"}
+        """
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try payload.write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let result = try runAXORCCommand(arguments: ["raw", "--debug", "--verbose", "--file", file.path])
+        #expect(result.exitCode == 0)
+        #expect(result.output?.contains(marker) == false)
+        #expect(result.errorOutput?.contains(marker) == false)
+    }
+
     @Test
     func `Unconvertible batch children return failure instead of empty success`() throws {
         let payload = """

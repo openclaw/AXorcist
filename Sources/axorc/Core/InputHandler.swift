@@ -99,12 +99,8 @@ enum InputHandler {
         let sourceDescription = "File: \(filePath)"
 
         do {
-            let rawFileContent = try String(contentsOfFile: filePath, encoding: .utf8) // Read raw
-            axDebugLog(
-                "HFI_DEBUG: Raw file content for [\(filePath)]: '\(rawFileContent)' (length: \(rawFileContent.count))")
-
+            let rawFileContent = try String(contentsOfFile: filePath, encoding: .utf8)
             let str = rawFileContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            axDebugLog("HFI_DEBUG: Trimmed file content: '\(str)' (length: \(str.count))")
 
             if !str.isEmpty {
                 axDebugLog("Successfully read \(str.count) characters from file: \(filePath)")

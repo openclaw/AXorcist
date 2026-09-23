@@ -164,11 +164,7 @@ struct AXORCCommand: ParsableCommand {
             throw ExitCode.failure
         }
 
-        self.logDebug(
-            logSegments(
-                "AXORCMain Test: Received jsonStringFromInput",
-                "[\(jsonStringFromInput)]",
-                "length: \(jsonStringFromInput.count)"))
+        self.logDebug("Received JSON input (\(jsonStringFromInput.count) characters).")
 
         try self.decodeAndExecute(
             jsonString: jsonStringFromInput,
@@ -262,6 +258,14 @@ struct AXORCCommand: ParsableCommand {
             self.respondWithError(
                 commandId: "decode_error",
                 error: "JSON command array must not be empty",
+                logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
+            throw ExitCode.failure
+        }
+
+        guard commands.count == 1 else {
+            self.respondWithError(
+                commandId: "decode_error",
+                error: "JSON input must contain exactly one command; use batch with sub_commands for multiple commands",
                 logs: self.debug ? GlobalAXLogger.shared.getLogsAsStrings() : nil)
             throw ExitCode.failure
         }
