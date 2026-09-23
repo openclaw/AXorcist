@@ -13,10 +13,10 @@ Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archive
 3. Build with the existing Developer ID Application identity:
 
    ```bash
-   AXORC_CODESIGN_IDENTITY='Developer ID Application: ...' scripts/build-release-artifact.sh 0.1.11
+   AXORC_CODESIGN_IDENTITY='Developer ID Application: ...' scripts/build-release-artifact.sh 0.2.0
    ```
 
-4. Submit each `dist/axorc-0.1.11-macos-*.zip` archive to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify each downloaded executable's notarization ticket online after publication.
+4. Submit each `dist/axorc-0.2.0-macos-*.zip` archive to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify each downloaded executable's notarization ticket online after publication.
 
 ### Reuse a hosted build
 
@@ -37,7 +37,7 @@ These are new release artifacts: notarize each rebuilt archive and follow every 
 3. Render the formula from the directory containing the public archives and checksum files verified above:
 
    ```bash
-   scripts/render-homebrew-formula.sh 0.1.11 --artifacts <verified-directory> > axorc.rb
+   scripts/render-homebrew-formula.sh 0.2.0 --artifacts <verified-directory> > axorc.rb
    ```
 
    The renderer checks each checksum against its archive and selects thin downloads only when both architecture pairs are present. An incomplete set fails. A directory with only the universal pair, or the existing `scripts/render-homebrew-formula.sh 0.1.10 <sha256>` invocation, renders a universal formula for older releases. Rendering does not replace the signature and notarization checks above or publish anything.

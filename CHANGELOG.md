@@ -4,15 +4,19 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-23
+
+**Highlights:** Prevent silent command loss and raw-input log dumps, improve CLI parsing, and ship smaller signed downloads for each Mac architecture.
+
+### Fixed
+- Reject multi-command top-level JSON arrays before dispatch instead of executing only the first command and silently dropping the rest; use explicit batches for multiple operations.
+- Remove leftover raw-input debug dumps so verbose diagnostics do not copy complete input files or payloads into logs.
+- Update Commander to 0.3.0 so CLI parsing rejects surplus positional arguments and accepts attached long-option values.
+- Verify universal binary architectures directly with `lipo` so release packaging does not fail when an early-closing `grep` interrupts `file` output.
+
 ### Added
 - Add smaller arm64 and x86_64 macOS release archives alongside the existing universal archive, preserving the signed executable and Homebrew compatibility.
 - Render architecture-specific Homebrew downloads from verified release archives, retaining universal formulas for older releases.
-
-### Fixed
-- Update Commander to 0.3.0 so CLI parsing rejects surplus positional arguments and accepts attached long-option values.
-- Reject multi-command top-level JSON arrays before dispatch instead of executing only the first command and silently dropping the rest; use explicit batches for multiple operations.
-- Remove leftover raw-input debug dumps so verbose diagnostics do not copy complete input files or payloads into logs.
-- Verify universal binary architectures directly with `lipo` so release packaging does not fail when an early-closing `grep` interrupts `file` output.
 
 ## [0.1.11] - 2026-09-20
 
