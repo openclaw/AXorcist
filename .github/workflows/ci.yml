@@ -33,7 +33,7 @@ jobs:
             xcode: "16.4"
             runner: macos-15
             validate: true
-          - swift: "6.3.3"
+          - swift: "6.4.0"
             xcode: "26.6"
             runner: macos-26
             validate: false
@@ -51,6 +51,7 @@ jobs:
       uses: SwiftyLab/setup-swift@38f54a76b70d989321de9dc7c840618c08cf56e9 # v1.14.0
       with:
         swift-version: ${{ matrix.swift }}
+        prefer-oss-toolchain: ${{ !matrix.validate }}
     
     - name: Install validation tools
       if: matrix.validate
@@ -100,3 +101,14 @@ jobs:
         scripts/render-homebrew-formula.sh "$version" --artifacts dist > /tmp/axorc.rb
         grep -Fq 'skip_clean "bin/axorc"' /tmp/axorc.rb
         ruby -c /tmp/axorc.rb
+
+    - name: Retain ad-hoc packaging artifacts
+      if: matrix.validate
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: axorc-adhoc-${{ github.sha }}
+        path: |
+          dist/axorc-*-macos-*.zip
+          dist/axorc-*-macos-*.zip.sha256
+        if-no-files-found: error
+        retention-days: 7

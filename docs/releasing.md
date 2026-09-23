@@ -18,6 +18,12 @@ Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archive
 
 4. Submit each `dist/axorc-0.1.11-macos-*.zip` archive to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify each downloaded executable's notarization ticket online after publication.
 
+### Reuse a hosted build
+
+CI retains its verified ad-hoc packaging archives for seven days. To avoid a local build, download the artifact from the successful run for the exact release source revision (a PR merge commit is suitable only when its tree matches the release commit). Verify the archived checksums, extract the universal executable, and replace its ad-hoc signature using `codesign --force --options runtime --timestamp --sign "$AXORC_CODESIGN_IDENTITY" axorc`. Restore mode `0755` and verify the Developer ID requirement, both architectures, `--version`, and `--help`. Extract the thin executables from that signed universal binary with `lipo -thin`, then recreate all three zip archives and checksums as in `scripts/build-release-artifact.sh`.
+
+These are new release artifacts: notarize each rebuilt archive and follow every publication and download verification step below. Never publish the ad-hoc CI archives directly.
+
 ## Publish and update Homebrew
 
 1. Upload all three zips and their `.sha256` files to the matching GitHub Release.

@@ -9,6 +9,7 @@ All notable changes to AXorcist will be documented in this file.
 - Render architecture-specific Homebrew downloads from verified release archives, retaining universal formulas for older releases.
 
 ### Fixed
+- Update Commander to 0.3.0 so CLI parsing rejects surplus positional arguments and accepts attached long-option values.
 - Reject multi-command top-level JSON arrays before dispatch instead of executing only the first command and silently dropping the rest; use explicit batches for multiple operations.
 - Remove leftover raw-input debug dumps so verbose diagnostics do not copy complete input files or payloads into logs.
 - Verify universal binary architectures directly with `lipo` so release packaging does not fail when an early-closing `grep` interrupts `file` output.
