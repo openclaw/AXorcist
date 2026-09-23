@@ -211,7 +211,7 @@ Maintainers: see [docs/releasing.md](docs/releasing.md) for the artifact and tap
 
 ### Local Development
 
-AXorcist always declares the remote Commander dependency at exactly `0.2.4`, regardless of checkout location or sibling folders. To work on a sibling Commander checkout, explicitly override it from your root workspace (the AXorcist checkout, or the package consuming AXorcist):
+AXorcist always declares the remote Commander dependency at exactly `0.3.0`, regardless of checkout location or sibling folders. To work on a sibling Commander checkout, explicitly override it from your root workspace (the AXorcist checkout, or the package consuming AXorcist):
 
 ```bash
 swift package resolve
@@ -654,6 +654,8 @@ echo '{
 
 Existing invocations such as `axorc --stdin` and `axorc '{...}'` remain supported. Prefer the explicit `raw` subcommand in new scripts.
 
+Long options also accept attached values, such as `axorc raw --json='{"command_id":"health","command":"ping"}'` or `axorc find --app Safari --title=-draft`. Extra positional arguments are rejected before command execution.
+
 ## Advanced Examples
 
 ### Complex Search with Path Navigation
@@ -822,6 +824,6 @@ Please follow the main Peekaboo contributing guidelines and open pull requests a
 
 Run `swift test` for the safe suites and `make check` for formatting, linting, native API policy, dependency resolution, and packaging-mode checks. CI uses the tool versions pinned in `.github/workflows/ci.yml` and `scripts/install-validation-tools.sh`.
 
-CI tests Swift 6.2.4 with Xcode 16.4 on macOS 15 and Swift 6.3.3 with Xcode 26.6 on macOS 26. Formatting, dependency-fixture and universal-packaging checks run once on the minimum-toolchain job. The repository's CodeQL workflow builds the Swift library and CLI directly with the minimum toolchain and also scans Python and Actions; it replaces GitHub's default setup.
+CI tests Swift 6.2.4 on macOS 15 and Swift 6.4 with Xcode 27.0 on GitHub's `xcode-27` preview runner. Formatting, dependency-fixture and universal-packaging checks run once on the minimum-toolchain job. The repository's CodeQL workflow builds the Swift library and CLI directly with the minimum toolchain and also scans Python and Actions; it replaces GitHub's default setup.
 
 Automation suites are opt-in (`RUN_AUTOMATION_TESTS=true swift test`) and require Accessibility permission and an interactive desktop. They launch and manipulate TextEdit; use a disposable account or VM. Generate coverage for the selected suites with `swift test --enable-code-coverage`.

@@ -111,7 +111,7 @@ class Harness:
         dependency = commander[0]
         require("sourceControl" in dependency, f"Commander became filesystem: {dependency}")
         entry = dependency["sourceControl"][0]
-        require(entry["requirement"] == {"exact": ["0.2.4"]}, f"Not exact 0.2.4: {entry}")
+        require(entry["requirement"] == {"exact": ["0.3.0"]}, f"Not exact 0.3.0: {entry}")
         require(
             entry["location"] == {"remote": [{"urlString": COMMANDER_URL}]},
             f"Commander URL changed: {entry}",
@@ -173,9 +173,9 @@ let package = Package(
 
     def repositories(self):
         commander = self.library("Commander", "Commander")
-        commander_revision = self.commit(commander, "0.2.4")
-        write(commander / "newer-release.txt", "Must not select 0.2.5 or main.\n")
-        self.commit(commander, "0.2.5")
+        commander_revision = self.commit(commander, "0.3.0")
+        write(commander / "newer-release.txt", "Must not select 0.3.1 or main.\n")
+        self.commit(commander, "0.3.1")
         logging = self.library("swift-log", "Logging")
         log_revision = self.commit(logging, "1.15.1")
         axorcist = self.root / "repositories" / "AXorcist"
@@ -194,7 +194,7 @@ let package = Package(
         }
         self.expected = {
             "axorcist": (FIXTURE_VERSION, axorcist_revision),
-            "commander": ("0.2.4", commander_revision),
+            "commander": ("0.3.0", commander_revision),
             "swift-log": ("1.15.1", log_revision),
         }
 
@@ -280,7 +280,7 @@ let package = Package(
                 self.assert_remote(self.dump(
                     ax_path, state / "checkout-probe", scratch=state / "probe-scratch", mode=mode,
                 ))
-            print(f"  PASS {base.name}: resolution {iteration + 1}, Commander exact 0.2.4", flush=True)
+            print(f"  PASS {base.name}: resolution {iteration + 1}, Commander exact 0.3.0", flush=True)
 
     def overrides(self, root_axorcist):
         base = self.root / ("edit-axorcist" if root_axorcist else "edit-consumer")
@@ -323,7 +323,7 @@ let package = Package(
         self.consumer(path)
         self.package(path, state, "resolve")
         self.check_graph(path, state)
-        print("  PASS root .package(path:) override -> remove override -> exact 0.2.4", flush=True)
+        print("  PASS root .package(path:) override -> remove override -> exact 0.3.0", flush=True)
 
 
 def main():

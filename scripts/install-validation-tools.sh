@@ -33,7 +33,7 @@ install_tool() {
   local archive_path="$temporary_directory/$name.zip"
   local extract_path="$temporary_directory/$name"
 
-  curl --fail --location --retry 3 --silent --show-error \
+  curl --fail --location --retry 3 --retry-all-errors --retry-max-time 120 --silent --show-error \
     "https://github.com/$owner/$repository/releases/download/$version/$archive_name" \
     --output "$archive_path"
   printf '%s  %s\n' "$sha256" "$archive_path" | shasum -a 256 --check

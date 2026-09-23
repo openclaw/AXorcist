@@ -134,6 +134,28 @@ struct CLIFrontendTests {
     }
 
     @Test
+    func `Raw attached JSON options execute normally`() throws {
+        let payload = #"{"command_id":"attached","command":"ping"}"#
+        let result = try runAXORCCommand(arguments: ["raw", "--json=\(payload)"])
+        #expect(result.exitCode == 0)
+        let data = try #require(result.output?.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["command_id"] as? String == "attached")
+        #expect(object["success"] as? Bool == true)
+    }
+
+    @Test
+    func `Raw extra positional arguments fail before dispatch`() throws {
+        let payload = #"{"command_id":"excess","command":"ping"}"#
+        let result = try runAXORCCommand(arguments: ["raw", payload, "unexpected"])
+        #expect(result.exitCode == 2)
+        let data = try #require(result.output?.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["command_id"] as? String == "argument_error")
+        #expect(object["success"] as? Bool == false)
+    }
+
+    @Test
     func `Human output visibly escapes terminal controls`() {
         let input = "title\nnext\t\u{1B}]52;clipboard\u{7}"
         let sanitized = CLIFrontend.sanitizeForTerminal(input)
