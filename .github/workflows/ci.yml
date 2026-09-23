@@ -34,8 +34,8 @@ jobs:
             runner: macos-15
             validate: true
           - swift: "6.4.0"
-            xcode: "26.6"
-            runner: macos-26
+            xcode: "27.0"
+            runner: xcode-27
             validate: false
 
     steps:
@@ -48,10 +48,14 @@ jobs:
         xcode-version: ${{ matrix.xcode }}
     
     - name: Install Swift toolchain
+      if: matrix.validate
       uses: SwiftyLab/setup-swift@38f54a76b70d989321de9dc7c840618c08cf56e9 # v1.14.0
       with:
         swift-version: ${{ matrix.swift }}
-        prefer-oss-toolchain: ${{ !matrix.validate }}
+
+    - name: Verify bundled latest Swift toolchain
+      if: ${{ !matrix.validate }}
+      run: swift --version | grep -E 'Swift version 6\.4([. ]|$)'
     
     - name: Install validation tools
       if: matrix.validate
