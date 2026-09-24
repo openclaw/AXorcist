@@ -110,6 +110,8 @@ let parent = element.parent()
 
 JSON encoding preserves numeric attribute values as numbers, including `0` and `1`; Boolean attributes remain `true` or `false`. `AnyCodable` decodes unsigned integers above `Int.max` as `UInt64` to retain their exact value. The value-formatting helpers display geometry and text ranges using their native types.
 
+Live generic attribute reads, including `Element.value()`, return the converted payload directly without boxing an extra optional inside `Any` or `AnyObject`. Missing native values remain `nil`.
+
 Integer text in geometry/range parsing accepts the full signed range, including `Int.min`. Overflow and malformed signs fail parsing without advancing the numeric cursor.
 
 Floating-point scanning converts complete scientific-notation tokens, retaining representable subnormal values and signed zero. Native attribute setters preserve numeric `NSNumber` values, including `0` and `1`, as CFNumber values; Boolean inputs remain CFBoolean values.

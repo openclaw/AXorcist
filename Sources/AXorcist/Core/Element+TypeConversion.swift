@@ -6,8 +6,10 @@ import Foundation
 extension Element {
     @MainActor
     func convertCFTypeToSwiftType<T>(_ cfValue: CFTypeRef, attribute: Attribute<T>) -> T? {
-        // Try specific type conversions first
-        if let converted = convertToSpecificType(cfValue, targetType: T.self) as? T {
+        // Unwrap before casting: Any/AnyObject can otherwise box an optional, including nil.
+        if let specificValue = convertToSpecificType(cfValue, targetType: T.self),
+           let converted = specificValue as? T
+        {
             return converted
         }
 
@@ -16,7 +18,7 @@ extension Element {
             GlobalAXLogger.shared.log(AXLogEntry(
                 level: .debug,
                 message: "Attribute \(attribute.rawValue): T is Any/AnyObject. Using ValueUnwrapper."))
-            return ValueUnwrapper.unwrap(cfValue) as? T
+            return ValueUnwrapper.unwrap(cfValue).flatMap { $0 as? T }
         }
 
         // Try direct cast
@@ -33,7 +35,7 @@ extension Element {
             level: .debug,
             message: "Attempting ValueUnwrapper for T = \(String(describing: T.self)), " +
                 "Attribute: \(attribute.rawValue)."))
-        return ValueUnwrapper.unwrap(cfValue) as? T
+        return ValueUnwrapper.unwrap(cfValue).flatMap { $0 as? T }
     }
 
     private func convertToSpecificType(_ cfValue: CFTypeRef, targetType: Any.Type) -> Any? {
