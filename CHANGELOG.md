@@ -4,6 +4,9 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Return live accessibility attribute payloads from generic `Any` and `AnyObject` reads instead of boxed optionals, restoring text returned by `Element.value()`.
+
 ## [0.2.0] - 2026-09-23
 
 **Highlights:** Prevent silent command loss and raw-input log dumps, improve CLI parsing, and ship smaller signed downloads for each Mac architecture.
