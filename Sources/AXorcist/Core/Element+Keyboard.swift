@@ -88,7 +88,8 @@ extension Element {
             return
         }
 
-        try self.postUnicodeCharacter(character)
+        let events = try self.unicodeCharacterEvents(character)
+        self.postTypingEvents(events)
     }
 
     static func keyboardStroke(for character: Character) -> (keyCode: CGKeyCode, flags: CGEventFlags)? {
@@ -184,45 +185,33 @@ extension Element {
     }
 
     private static func postKeyboardStroke(_ stroke: (keyCode: CGKeyCode, flags: CGEventFlags)) throws {
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: stroke.keyCode, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: stroke.keyCode, keyDown: false)
-        else {
-            throw UIAutomationError.failedToCreateEvent
-        }
-
-        keyDown.flags = stroke.flags
-        keyUp.flags = stroke.flags
-        keyDown.post(tap: .cghidEventTap)
-        Thread.sleep(forTimeInterval: 0.001)
-        keyUp.post(tap: .cghidEventTap)
+        let descriptors = self.typingEventDescriptors(keyCode: stroke.keyCode, modifiers: stroke.flags)
+        let events = try self.keyboardEvents(for: descriptors)
+        self.postTypingEvents(events)
     }
 
-    private static func postUnicodeCharacter(_ character: Character) throws {
-        let string = String(character)
-
-        // Create keyboard event
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true) else {
-            throw UIAutomationError.failedToCreateEvent
-        }
-
-        // Set the character
-        let chars = Array(string.utf16)
+    static func unicodeCharacterEvents(
+        _ character: Character,
+        factory: @MainActor (KeyboardEventDescriptor) -> CGEvent? = Element.makeKeyboardEvent) throws -> [CGEvent]
+    {
+        let descriptors = self.typingEventDescriptors(keyCode: 0, modifiers: [])
+        let events = try self.keyboardEvents(for: descriptors, factory: factory)
+        let chars = Array(String(character).utf16)
         chars.withUnsafeBufferPointer { buffer in
-            keyDown.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: buffer.baseAddress!)
+            for event in events {
+                event.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: buffer.baseAddress!)
+            }
         }
+        return events
+    }
 
-        // Create key up event
-        guard let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
-            throw UIAutomationError.failedToCreateEvent
+    private static func postTypingEvents(_ events: [CGEvent]) {
+        for (index, event) in events.enumerated() {
+            event.post(tap: .cghidEventTap)
+            if index == 0 {
+                Thread.sleep(forTimeInterval: 0.001)
+            }
         }
-        chars.withUnsafeBufferPointer { buffer in
-            keyUp.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: buffer.baseAddress!)
-        }
-
-        // Post events
-        keyDown.post(tap: .cghidEventTap)
-        Thread.sleep(forTimeInterval: 0.001)
-        keyUp.post(tap: .cghidEventTap)
     }
 
     /// Type a special key
@@ -231,22 +220,7 @@ extension Element {
             throw UIAutomationError.unsupportedKey(key.rawValue)
         }
 
-        // Create key down event
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true) else {
-            throw UIAutomationError.failedToCreateEvent
-        }
-        keyDown.flags = modifiers
-
-        // Create key up event
-        guard let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
-            throw UIAutomationError.failedToCreateEvent
-        }
-        keyUp.flags = modifiers
-
-        // Post events
-        keyDown.post(tap: .cghidEventTap)
-        Thread.sleep(forTimeInterval: 0.001)
-        keyUp.post(tap: .cghidEventTap)
+        try self.postKeyboardStroke((keyCode, modifiers))
     }
 
     /// Perform a hotkey combination
@@ -290,12 +264,7 @@ extension Element {
 
         let descriptors = self.hotkeyEventDescriptors(modifiers: modifiers, mainKeyCode: mainKeyCode)
         // Build the complete sequence before posting anything. Event creation can fail; posting cannot.
-        let events = try self.keyboardEvents(for: descriptors) { descriptor in
-            CGEvent(
-                keyboardEventSource: nil,
-                virtualKey: descriptor.keyCode,
-                keyDown: descriptor.keyDown)
-        }
+        let events = try self.keyboardEvents(for: descriptors)
 
         for (descriptor, event) in zip(descriptors, events) {
             event.post(tap: .cghidEventTap)
@@ -314,6 +283,16 @@ extension Element {
         let keyCode: CGKeyCode
         let keyDown: Bool
         let flags: CGEventFlags
+    }
+
+    static func typingEventDescriptors(
+        keyCode: CGKeyCode,
+        modifiers: CGEventFlags) -> [KeyboardEventDescriptor]
+    {
+        [
+            KeyboardEventDescriptor(keyCode: keyCode, keyDown: true, flags: modifiers),
+            KeyboardEventDescriptor(keyCode: keyCode, keyDown: false, flags: []),
+        ]
     }
 
     static func hotkeyEventDescriptors(
@@ -345,7 +324,7 @@ extension Element {
 
     static func keyboardEvents(
         for descriptors: [KeyboardEventDescriptor],
-        factory: (KeyboardEventDescriptor) -> CGEvent?) throws -> [CGEvent]
+        factory: @MainActor (KeyboardEventDescriptor) -> CGEvent? = Element.makeKeyboardEvent) throws -> [CGEvent]
     {
         try descriptors.map { descriptor in
             guard let event = factory(descriptor) else {
@@ -354,5 +333,12 @@ extension Element {
             event.flags = descriptor.flags
             return event
         }
+    }
+
+    static func makeKeyboardEvent(_ descriptor: KeyboardEventDescriptor) -> CGEvent? {
+        CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: descriptor.keyCode,
+            keyDown: descriptor.keyDown)
     }
 }
