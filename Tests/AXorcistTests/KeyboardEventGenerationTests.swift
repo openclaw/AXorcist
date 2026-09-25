@@ -113,6 +113,40 @@ struct KeyboardEventGenerationTests {
         #expect(events.map(\.flags) == descriptors.map(\.flags))
     }
 
+    @Test(arguments: [(0, 0), (1, 0), (1, 1), (3, 0), (3, 1), (3, 2), (3, 3)])
+    func `Fn hotkeys finish neutral without changing physical modifier order`(
+        physicalModifierCount: Int,
+        functionModifierIndex: Int) throws
+    {
+        let physicalModifiers = Array([
+            Element.HotkeyModifier(keyCode: 0x37, flag: .maskCommand),
+            Element.HotkeyModifier(keyCode: 0x38, flag: .maskShift),
+            Element.HotkeyModifier(keyCode: 0x3A, flag: .maskAlternate),
+        ].prefix(physicalModifierCount))
+        let physicalDescriptors = Element.hotkeyEventDescriptors(modifiers: physicalModifiers, mainKeyCode: 0)
+        var modifiers = physicalModifiers
+        modifiers.insert(.init(keyCode: nil, flag: .maskSecondaryFn), at: functionModifierIndex)
+        let descriptors = Element.hotkeyEventDescriptors(modifiers: modifiers, mainKeyCode: 0)
+
+        #expect(descriptors.map {
+            Element.KeyboardEventDescriptor(
+                keyCode: $0.keyCode,
+                keyDown: $0.keyDown,
+                flags: $0.flags.subtracting(.maskSecondaryFn))
+        } == physicalDescriptors)
+        let mainKeyDown = try #require(descriptors.first { $0.keyCode == 0 && $0.keyDown })
+        #expect(mainKeyDown.flags.contains(.maskSecondaryFn))
+        let terminalDescriptor = try #require(descriptors.last)
+        #expect(!terminalDescriptor.keyDown)
+        #expect(terminalDescriptor.flags.isEmpty)
+
+        let events = try Element.keyboardEvents(for: descriptors, factory: Self.contaminatedEvent)
+        #expect(events.map(\.flags) == descriptors.map(\.flags))
+        let terminalEvent = try #require(events.last)
+        #expect(terminalEvent.getIntegerValueField(.keyboardEventKeycode) == Int64(terminalDescriptor.keyCode))
+        #expect(terminalEvent.flags.isEmpty)
+    }
+
     private static func contaminatedEvent(_ descriptor: Element.KeyboardEventDescriptor) -> CGEvent? {
         let event = Element.makeKeyboardEvent(descriptor)
         event?.flags = [.maskCommand, .maskControl, .maskShift, .maskAlternate, .maskAlphaShift, .maskSecondaryFn]

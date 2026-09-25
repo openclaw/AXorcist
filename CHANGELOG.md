@@ -7,6 +7,7 @@ All notable changes to AXorcist will be documented in this file.
 ### Fixed
 - Return live accessibility attribute payloads from generic `Any` and `AnyObject` reads instead of boxed optionals, restoring text returned by `Element.value()`.
 - Clear inherited modifier flags during Unicode typing and release layout or explicit typing modifiers on the final key-up without changing hotkey modifier-release sequences. Thanks @jandubois for the report in [Peekaboo #797](https://github.com/openclaw/Peekaboo/issues/797).
+- Clear flag-only Fn modifiers on the final hotkey release regardless of modifier order, preserving the existing physical key sequence.
 
 ## [0.2.0] - 2026-09-23
 
