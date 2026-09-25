@@ -513,6 +513,8 @@ a string `action_value` and writes `AXValue` directly without invoking an access
 
 The instance methods `element.typeText(...)` and `element.clearField()` establish native focus before posting keyboard input and throw if focus cannot be established. Clearing as part of `typeText(..., clearFirst: true)` uses the same preflight.
 
+Typed characters use only their required keyboard-layout modifiers and end with a neutral key-up. Unicode events do not inherit held modifier flags. `Element.typeKey(_:modifiers:)` likewise releases its requested modifiers on key-up; hotkeys retain their ordered physical modifier-release sequence.
+
 ## Notifications and Observing
 
 Monitor UI changes with these notifications:
