@@ -319,6 +319,14 @@ extension Element {
             }
         }
 
+        // Flag-only modifiers have no release event, so neutralize the final existing release.
+        let finalIndex = descriptors.count - 1
+        let finalDescriptor = descriptors[finalIndex]
+        descriptors[finalIndex] = KeyboardEventDescriptor(
+            keyCode: finalDescriptor.keyCode,
+            keyDown: finalDescriptor.keyDown,
+            flags: [])
+
         return descriptors
     }
 
