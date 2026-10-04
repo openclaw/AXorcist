@@ -4,6 +4,10 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-04
+
+**Highlights:** Restore text from live attribute reads and keep modifier flags from leaking into typed text or sticking after hotkeys.
+
 ### Fixed
 - Return live accessibility attribute payloads from generic `Any` and `AnyObject` reads instead of boxed optionals, restoring text returned by `Element.value()`.
 - Clear inherited modifier flags during Unicode typing and release layout or explicit typing modifiers on the final key-up without changing hotkey modifier-release sequences. Thanks @jandubois for the report in [Peekaboo #797](https://github.com/openclaw/Peekaboo/issues/797).
