@@ -10,8 +10,17 @@ struct AXTimeoutHelperTests {
     @MainActor
     @Test
     func `completes before timeout`() async throws {
-        let value: Int = try await AXTimeoutHelper.withTimeout(seconds: 0.2) {
-            try await Task.sleep(nanoseconds: 50_000_000)
+        let started = ObserverAsyncStartGate()
+        let release = ObserverAsyncStartGate()
+        Task.detached {
+            await started.wait()
+            release.open()
+        }
+        // Completion is gated, not timed: a sleep inside a short deadline
+        // flaked on loaded CI runners. The deadline only guards against hangs.
+        let value: Int = try await AXTimeoutHelper.withTimeout(seconds: 30) {
+            started.open()
+            await release.wait()
             return 7
         }
         #expect(value == 7)
@@ -22,7 +31,8 @@ struct AXTimeoutHelperTests {
     func `throws on timeout`() async {
         do {
             _ = try await AXTimeoutHelper.withTimeout(seconds: 0.05) {
-                try await Task.sleep(nanoseconds: 200_000_000)
+                // Cooperative: the timeout cancels this sleep, so the test stays fast.
+                try await Task.sleep(for: .seconds(30))
                 return 1
             }
             Issue.record("Expected timeout but succeeded")

@@ -4,6 +4,10 @@ import Testing
 
 @Suite("Permission change stream")
 nonisolated struct PermissionChangeStreamTests {
+    /// Hang guard only. The blocked main queue or install hook stays held for the
+    /// whole wait, so a join still fails; a short bound flakes on loaded CI.
+    private static let cancellationTimeout: DispatchTimeInterval = .seconds(10)
+
     @Test
     func `permissionChanges cancel does not join the main queue`() async {
         let stream = await MainActor.run {
@@ -58,7 +62,7 @@ nonisolated struct PermissionChangeStreamTests {
         Thread.detachNewThread {
             consume.cancel()
         }
-        let finished = consumeFinished.wait(timeout: .now() + .milliseconds(400)) == .success
+        let finished = consumeFinished.wait(timeout: .now() + Self.cancellationTimeout) == .success
         releaseMain.signal()
         return finished
     }
@@ -113,7 +117,7 @@ nonisolated struct PermissionChangeStreamTests {
 
         installReached.wait()
         consume.cancel()
-        let cancelled = consumeFinished.wait(timeout: .now() + .milliseconds(400)) == .success
+        let cancelled = consumeFinished.wait(timeout: .now() + Self.cancellationTimeout) == .success
         releaseInstall.signal()
 
         let flushed = DispatchSemaphore(value: 0)
