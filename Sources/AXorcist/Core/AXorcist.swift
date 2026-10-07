@@ -145,7 +145,9 @@ public class AXorcist {
 
     func handleCollectAll(
         command: CollectAllCommand,
-        traversalOptions _: AXTraversalOptions) -> AXResponse
+        traversalOptions: AXTraversalOptions,
+        applicationResolver: AXApplicationElementResolver = nativeApplicationElement,
+        now: @escaping AXTraversalClock = { ProcessInfo.processInfo.systemUptime }) -> AXResponse
     {
         self.logger.log(AXLogEntry(
             level: .info,
@@ -153,7 +155,11 @@ public class AXorcist {
                 "with maxDepth: \(command.maxDepth)"))
 
         let rootElement: Element
-        switch resolveApplicationTarget(appIdentifier: command.appIdentifier, pid: command.pid) {
+        switch resolveApplicationTarget(
+            appIdentifier: command.appIdentifier,
+            pid: command.pid,
+            using: applicationResolver)
+        {
         case let .success(resolvedTarget):
             rootElement = resolvedTarget.element
         case let .failure(error):
@@ -168,7 +174,9 @@ public class AXorcist {
             attributesToFetch: attributesToFetch)
         let collectedElements = self.collectElementData(
             from: rootElement,
-            context: collectionContext)
+            context: collectionContext,
+            traversalOptions: traversalOptions,
+            now: now)
 
         self.logger.log(AXLogEntry(
             level: .info,
@@ -189,18 +197,28 @@ public class AXorcist {
 
     private func collectElementData(
         from root: Element,
-        context: ElementCollectionContext) -> [AXElementData]
+        context: ElementCollectionContext,
+        traversalOptions: AXTraversalOptions,
+        now: @escaping AXTraversalClock) -> [AXElementData]
     {
         var collectedElements: [AXElementData] = []
         traverseAXTree(
             from: root,
             maxDepth: context.maxDepth,
+            timeout: traversalOptions.timeout,
+            now: now,
+            onTimeout: {
+                self.logger.log(AXLogEntry(
+                    level: .warning,
+                    message: "HandleCollectAll: traversal timeout (\(traversalOptions.timeout)s) reached. " +
+                        "Aborting traversal."))
+            },
             visit: { element, _ in
                 let shouldInclude = context.filterCriteria.map { criteria in
                     elementMatchesCriteria(element, criteria: criteria)
                 } ?? true
                 if shouldInclude {
-                    collectedElements.append(buildQueryResponse(
+                    collectedElements.append(self.buildQueryResponse(
                         element: element,
                         attributesToFetch: context.attributesToFetch,
                         includeChildrenBrief: false))

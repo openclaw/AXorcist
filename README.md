@@ -467,6 +467,10 @@ Monitor UI changes in real-time.
 ### 7. Collect All
 Recursively collect all elements.
 
+Collection honors the request's traversal timeout (`--timeout` in the CLI), checking the deadline between elements.
+When the deadline expires, it logs a warning and returns the elements collected so far as a successful partial result.
+The traversal deadline does not interrupt an accessibility call already in progress.
+
 ```json
 {
   "command_id": "collect-buttons",
