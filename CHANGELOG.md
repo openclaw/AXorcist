@@ -8,6 +8,9 @@ All notable changes to AXorcist will be documented in this file.
 - Honor the request timeout during `collectAll` traversal and retain elements collected before the deadline. Thanks @SebTardif.
 - Subscribe to every requested observation notification, reject invalid names before registration, and roll back a failed request without disturbing existing observers. Thanks @SebTardif.
 
+### Changed
+- Update SwiftFormat to 0.63.1, setup-swift to 1.14.1, and CodeQL Action to 4.38.2 for validation and toolchain setup fixes.
+
 ## [0.2.1] - 2026-10-04
 
 **Highlights:** Restore text from live attribute reads and keep modifier flags from leaking into typed text or sticking after hotkeys.
