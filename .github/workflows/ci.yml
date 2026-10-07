@@ -49,7 +49,7 @@ jobs:
     
     - name: Install Swift toolchain
       if: matrix.validate
-      uses: SwiftyLab/setup-swift@38f54a76b70d989321de9dc7c840618c08cf56e9 # v1.14.0
+      uses: SwiftyLab/setup-swift@9014d4136569075c696d4151c7810ecde8712907 # v1.14.1
       with:
         swift-version: ${{ matrix.swift }}
 
