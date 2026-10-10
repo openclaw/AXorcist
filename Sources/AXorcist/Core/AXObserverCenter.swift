@@ -396,9 +396,11 @@ extension AXObserverCenter {
             }
         }
 
-        if self.nativeRegistrationStates[registration] != nil,
-           self.pendingRemovals[registration] == nil
-        {
+        // Only a removal that failed during an earlier request is retried. A removal started here is
+        // only awaited, so a fast native failure is reported instead of being retried in this call.
+        if self.pendingRemovals[registration] != nil {
+            _ = self.restartPendingRemovalIfNeeded(registration)
+        } else if self.nativeRegistrationStates[registration] != nil {
             guard let observer = self.getObserver(for: registration.subscription.pid) else {
                 self.nativeRegistrationStates.removeValue(forKey: registration)
                 return self.removeCompatibilityToken(token, registration: registration)
@@ -408,7 +410,7 @@ extension AXObserverCenter {
                 cleanup: self.nativeRegistrationWork(for: registration, observer: observer))
         }
         if self.pendingRemovals[registration] != nil,
-           self.finishPendingRemovalSynchronously(registration) != true
+           !self.awaitPendingRemovalSynchronously(registration)
         {
             return self.pendingRemovals[registration]?.completion.currentResult() ?? .cannotComplete
         }

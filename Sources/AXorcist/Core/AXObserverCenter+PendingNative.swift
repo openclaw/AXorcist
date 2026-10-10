@@ -405,16 +405,19 @@ extension AXObserverCenter {
             return nil
         }
         _ = self.restartPendingRemovalIfNeeded(registration)
+        return self.awaitPendingRemovalSynchronously(registration)
+    }
+
+    /// Waits for the current native removal attempt without retrying it. Returns whether the
+    /// pending removal finished within the bound.
+    func awaitPendingRemovalSynchronously(_ registration: AXObserverRegistrationKey) -> Bool {
         guard let pending = self.pendingRemovals[registration] else { return false }
         let clock = ContinuousClock()
         guard let error = pending.completion.wait(until: clock.now.advanced(by: .milliseconds(750))) else {
             return false
         }
         self.completePendingRemoval(registration, id: pending.id, error: error)
-        if self.pendingRemovals[registration] != nil {
-            return false
-        }
-        return true
+        return self.pendingRemovals[registration] == nil
     }
 
     func completePendingRemoval(
