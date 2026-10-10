@@ -5,6 +5,7 @@ All notable changes to AXorcist will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Stop idle global observers from burning CPU when unrelated applications launch or quit: index workspace applications by identity instead of `NSRunningApplication`'s constant hash, and stop re-reading resolved PIDs on every snapshot (each launch invalidated AppKit's cached LaunchServices metadata for every application). An idle `peekaboo mcp` with ~600 running applications drops from ~0.68 s to ~0.02 s of CPU per launch and quit (openclaw/Peekaboo#1005).
 - Honor the request timeout during `collectAll` traversal and retain elements collected before the deadline. Thanks @SebTardif.
 - Subscribe to every requested observation notification, reject invalid names before registration, and roll back a failed request without disturbing existing observers. Thanks @SebTardif.
 

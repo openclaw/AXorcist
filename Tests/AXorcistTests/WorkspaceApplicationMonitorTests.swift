@@ -227,6 +227,30 @@ struct WorkspaceApplicationMonitorTests {
     }
 
     @Test
+    func `constant hash equal wrappers share membership and PID reuse replaces it`() async {
+        let probe = ApplicationMetadataProbe()
+        let original = MonitorApplication(instance: "same", pid: 42, probe: probe, constantHash: true)
+        let alias = MonitorApplication(instance: "same", pid: 42, probe: probe, constantHash: true)
+        let replacement = MonitorApplication(instance: "replacement", pid: 42, probe: probe, constantHash: true)
+        let workspace = MonitorWorkspace(applications: [original, alias, original])
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var events: [String] = []
+        monitor.start(onLaunch: { events.append("launch:\($0)") }, onTermination: { events.append("terminate:\($0)") })
+        await workspace.flushMetadata()
+        #expect(events == ["launch:42"])
+        workspace.applications = [alias]
+        await workspace.flushMetadata()
+        workspace.applications = [original]
+        await workspace.flushMetadata()
+        #expect(events == ["launch:42"])
+        workspace.applications = [replacement]
+        await workspace.flushMetadata()
+        #expect(events == ["launch:42", "terminate:42", "launch:42"])
+        #expect(monitor.runningProcessIdentifiers == [42])
+        monitor.stop()
+    }
+
+    @Test
     func `indexed workspace changes retain unchanged applications and reject invalid PIDs`() async {
         let probe = ApplicationMetadataProbe()
         let original = MonitorApplication(instance: "original", pid: 41, probe: probe)
@@ -388,6 +412,134 @@ struct WorkspaceApplicationMonitorTests {
 
 @MainActor
 extension WorkspaceApplicationMonitorTests {
+    @Test
+    func `PID delivery preserves changes and repeated invalid values`() async {
+        let probe = ApplicationMetadataProbe()
+        let workspace = MonitorWorkspace(applications: [])
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var deliveries: [pid_t] = []
+        var events: [String] = []
+        monitor.didReceivePID = {
+            if $0 >= 0 {
+                deliveries.append($0)
+            }
+        }
+        monitor.start(onLaunch: { events.append("launch:\($0)") }, onTermination: { events.append("terminate:\($0)") })
+        for pid: pid_t in [0, 0, 42, 42, 43, 0, 0, 43] {
+            workspace.applications = [MonitorApplication(instance: "same", pid: pid, probe: probe)]
+        }
+        await workspace.flushMetadata()
+
+        #expect(deliveries == [0, 0, 42, 43, 0, 0, 43])
+        #expect(events == ["launch:42", "terminate:43", "launch:43"])
+        #expect(monitor.runningProcessIdentifiers == [43])
+        monitor.stop()
+    }
+
+    @Test(arguments: [500, 600])
+    func `constant hash snapshots reconcile with linear equality work`(_ count: Int) async {
+        let probe = ApplicationMetadataProbe()
+        let applications = (1...count).map {
+            MonitorApplication(instance: "app-\($0)", pid: pid_t($0), probe: probe, constantHash: true)
+        }
+        let added = MonitorApplication(instance: "added", pid: pid_t(count + 1), probe: probe, constantHash: true)
+        let workspace = MonitorWorkspace(applications: applications)
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var launches: [pid_t] = []
+        var terminations: [pid_t] = []
+        monitor.start(onLaunch: { launches.append($0) }, onTermination: { terminations.append($0) })
+        await workspace.flushMetadata()
+
+        let launchComparisons = await workspace.countReconcileEqualities(applications + [added], probe: probe)
+        await workspace.flushMetadata()
+        let removalComparisons = await workspace.countReconcileEqualities(applications, probe: probe)
+        await workspace.flushMetadata()
+
+        print("Constant-hash reconcile N=\(count): launch=\(launchComparisons), removal=\(removalComparisons)")
+        #expect(launchComparisons <= 3 * count)
+        #expect(removalComparisons <= 3 * count)
+        #expect(launches == (1...count + 1).map { pid_t($0) })
+        #expect(terminations == [pid_t(count + 1)])
+        #expect(monitor.runningProcessIdentifiers.sorted() == (1...count).map { pid_t($0) })
+        monitor.stop()
+    }
+
+    @Test
+    func `unchanged snapshots deliver no redundant positive PIDs`() async {
+        let probe = ApplicationMetadataProbe()
+        let applications = (1...10).map { MonitorApplication(instance: "app-\($0)", pid: pid_t($0), probe: probe) }
+        let workspace = MonitorWorkspace(applications: applications)
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var deliveries: [pid_t] = []
+        var launches: [pid_t] = []
+        var terminations: [pid_t] = []
+        monitor.didReceivePID = {
+            if $0 > 0 {
+                deliveries.append($0)
+            }
+        }
+        monitor.start(onLaunch: { launches.append($0) }, onTermination: { terminations.append($0) })
+        await workspace.flushMetadata()
+        #expect(deliveries == (1...10).map { pid_t($0) })
+        deliveries = []
+        workspace.applications = applications
+        workspace.applications = applications
+        await workspace.flushMetadata()
+
+        #expect(deliveries.isEmpty)
+        #expect(launches == (1...10).map { pid_t($0) })
+        #expect(terminations.isEmpty)
+        workspace.applications = []
+        await workspace.flushMetadata()
+        #expect(terminations == (1...10).map { pid_t($0) })
+        monitor.stop()
+    }
+
+    /// Many system processes never report finished launching; their PIDs must not be re-read either.
+    @Test(arguments: [true, false])
+    func `resolved wrappers are not re-read when other applications launch or quit`(_ ready: Bool) async {
+        let probe = ApplicationMetadataProbe()
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let countRead: @Sendable () -> Void = { reads.withLock { $0 += 1 } }
+        let applications = (1...50).map {
+            MonitorApplication(
+                instance: "app-\($0)",
+                pid: pid_t($0),
+                ready: ready,
+                probe: probe,
+                constantHash: true,
+                onPIDRead: countRead)
+        }
+        let added = MonitorApplication(
+            instance: "added",
+            pid: 51,
+            ready: ready,
+            probe: probe,
+            constantHash: true,
+            onPIDRead: countRead)
+        let workspace = MonitorWorkspace(applications: applications)
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var launches: [pid_t] = []
+        var terminations: [pid_t] = []
+        monitor.start(onLaunch: { launches.append($0) }, onTermination: { terminations.append($0) })
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 50)
+
+        reads.withLock { $0 = 0 }
+        workspace.applications = applications + [added]
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 1)
+
+        reads.withLock { $0 = 0 }
+        workspace.applications = applications
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 0)
+        #expect(launches == (1...51).map { pid_t($0) })
+        #expect(terminations == [51])
+        #expect(monitor.runningProcessIdentifiers.sorted() == (1...50).map { pid_t($0) })
+        monitor.stop()
+    }
+
     @Test(arguments: ObservationEnd.allCases)
     private func `readiness lease retains the exact wrapper through queued invalidation`(_ end: ObservationEnd) async {
         let probe = ApplicationMetadataProbe()
@@ -500,6 +652,7 @@ private final nonisolated class ApplicationMetadataProbe: Sendable {
         var insideCallback = false
         var terminationReads = 0
         var reentrantMetadataReads = 0
+        var equalityCalls = 0
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -514,6 +667,15 @@ private final nonisolated class ApplicationMetadataProbe: Sendable {
 
     var reentrantMetadataReads: Int {
         self.state.withLock { $0.reentrantMetadataReads }
+    }
+
+    var equalityCalls: Int {
+        get { self.state.withLock { $0.equalityCalls } }
+        set { self.state.withLock { $0.equalityCalls = newValue } }
+    }
+
+    func recordEquality() {
+        self.state.withLock { $0.equalityCalls += 1 }
     }
 
     func recordRead(termination: Bool = false) {
@@ -739,6 +901,20 @@ private final class MonitorWorkspace: NSObject {
         self.applications.removeAll { $0 === fence }
         await drainMainQueue()
     }
+
+    func countReconcileEqualities(
+        _ applications: [NSRunningApplication],
+        probe: ApplicationMetadataProbe) async -> Int
+    {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                probe.equalityCalls = 0
+                self.applications = applications
+                // Enqueued before reconcile can schedule metadata results back to the main queue.
+                DispatchQueue.main.async { continuation.resume(returning: probe.equalityCalls) }
+            }
+        }
+    }
 }
 
 @MainActor
@@ -760,6 +936,7 @@ private final nonisolated class MonitorApplication: NSRunningApplication, @unche
     private let ready: OSAllocatedUnfairLock<Bool>
     private let gate: MetadataGate?
     private let lifetime: ApplicationLifetimeProbe?
+    private let constantHash: Bool
     private let onPIDRead: (@Sendable () -> Void)?
 
     @MainActor
@@ -770,6 +947,7 @@ private final nonisolated class MonitorApplication: NSRunningApplication, @unche
         probe: ApplicationMetadataProbe,
         gate: MetadataGate? = nil,
         lifetime: ApplicationLifetimeProbe? = nil,
+        constantHash: Bool = false,
         onPIDRead: (@Sendable () -> Void)? = nil)
     {
         self.instance = instance
@@ -778,6 +956,7 @@ private final nonisolated class MonitorApplication: NSRunningApplication, @unche
         self.probe = probe
         self.gate = gate
         self.lifetime = lifetime
+        self.constantHash = constantHash
         self.onPIDRead = onPIDRead
         super.init()
         _ = Self.deallocating.withLock { $0.remove(ObjectIdentifier(self)) }
@@ -834,10 +1013,11 @@ private final nonisolated class MonitorApplication: NSRunningApplication, @unche
     }
 
     override var hash: Int {
-        self.instance.hashValue
+        self.constantHash ? 1 : self.instance.hashValue
     }
 
     override func isEqual(_ object: Any?) -> Bool {
-        (object as? MonitorApplication)?.instance == self.instance
+        self.probe.recordEquality()
+        return (object as? MonitorApplication)?.instance == self.instance
     }
 }
