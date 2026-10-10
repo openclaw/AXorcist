@@ -181,6 +181,34 @@ struct ObserverSynchronousLifecycleTests {
         #expect(calls.removeCount == 2)
     }
 
+    @Test
+    func `awaiting a removal reports its fast failure and only a later request retries it`() async {
+        let calls = ObserverWorkCalls()
+        let remove: @Sendable () -> AXError = {
+            calls.recordRemove()
+            return calls.removeCount == 1 ? .cannotComplete : .success
+        }
+        let center = self.makeCenter(add: { .success }, remove: remove)
+        let registration = AXObserverRegistrationKey(
+            subscription: AXNotificationSubscriptionKey(pid: getpid(), notification: .valueChanged),
+            element: Element(AXUIElementCreateApplication(getpid())),
+            scope: .process)
+
+        center.scheduleNativeRemoval(
+            registration,
+            cleanup: ObserverNativeRegistrationWork(add: { .success }, remove: remove))
+        // The native attempt fails before anyone waits, as an instant failure can on a busy host.
+        await self.waitForRemovalResult(center, registration)
+
+        #expect(!center.awaitPendingRemovalSynchronously(registration))
+        #expect(calls.removeCount == 1)
+        #expect(center.pendingRemovals[registration] != nil)
+
+        #expect(center.finishPendingRemovalSynchronously(registration) == true)
+        #expect(calls.removeCount == 2)
+        #expect(center.pendingRemovals.isEmpty)
+    }
+
     private func makeCenter(
         add: @escaping @Sendable () -> AXError,
         remove: @escaping @Sendable () -> AXError) -> AXObserverCenter
@@ -197,6 +225,19 @@ struct ObserverSynchronousLifecycleTests {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(10))
         while !center.pendingRegistrations.isEmpty || !center.pendingRemovals.isEmpty,
+              clock.now < deadline
+        {
+            await Task.yield()
+        }
+    }
+
+    private func waitForRemovalResult(
+        _ center: AXObserverCenter,
+        _ registration: AXObserverRegistrationKey) async
+    {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(10))
+        while center.pendingRemovals[registration]?.completion.currentResult() == nil,
               clock.now < deadline
         {
             await Task.yield()
