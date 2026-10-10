@@ -116,6 +116,7 @@ final class AXWorkspaceApplicationMonitor: AXGlobalApplicationMonitoring {
             }
         }
         // Re-key to this snapshot, dropping old aliases before releasing their wrappers.
+        let previousEntriesByIdentity = self.entriesByIdentity
         self.entriesByIdentity = [:]
         let wrappersByID = Dictionary(grouping: runningApplications) {
             currentEntries[ObjectIdentifier($0)]!.request.id
@@ -130,7 +131,16 @@ final class AXWorkspaceApplicationMonitor: AXGlobalApplicationMonitoring {
         }
         for application in runningApplications {
             guard self.sessionID == sessionID else { return }
-            self.entriesByIdentity[ObjectIdentifier(application)]?.request.refresh(application)
+            let identity = ObjectIdentifier(application)
+            guard let entry = currentEntries[identity] else { continue }
+            // Every launch or quit invalidates AppKit's cached metadata for all wrappers, so re-reading
+            // settled wrappers would cost a LaunchServices lookup per application. A wrapper the entry
+            // already held keeps its process; new or equal-but-distinct wrappers are always read.
+            // Membership removal still delivers termination.
+            if previousEntriesByIdentity[identity] === entry, entry.request.isSettled {
+                continue
+            }
+            entry.request.refresh(application)
         }
     }
 
@@ -199,6 +209,7 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
     private struct State {
         var cancelled = false
         var readinessStarted = false
+        var readinessResolved = false
         var lastDeliveredPID: pid_t?
         var observation: ReadinessObservation?
     }
@@ -243,6 +254,13 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
         self.queue.async { observation?.invalidate() }
     }
 
+    /// A delivered positive PID with resolved readiness needs no further metadata reads.
+    var isSettled: Bool {
+        self.state.withLock {
+            !$0.cancelled && $0.readinessResolved && ($0.lastDeliveredPID ?? 0) > 0
+        }
+    }
+
     func refresh(_ application: NSRunningApplication) {
         self.queue.async { [self] in
             guard !self.isCancelled else { return }
@@ -278,6 +296,7 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
     private func resetReadiness() {
         let observation = self.state.withLock {
             $0.readinessStarted = false
+            $0.readinessResolved = false
             let observation = $0.observation
             $0.observation = nil
             return observation
@@ -286,7 +305,11 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
     }
 
     private func observeReadiness(of application: NSRunningApplication) {
-        guard !application.isFinishedLaunching, !self.isCancelled else { return }
+        guard !self.isCancelled else { return }
+        guard !application.isFinishedLaunching else {
+            self.state.withLock { $0.readinessResolved = true }
+            return
+        }
         let observationID = UUID()
         // Do not request .new: KVO would fetch readiness synchronously on the notifying thread.
         let token = application.observe(\.isFinishedLaunching, options: []) { [weak self] application, _ in
@@ -313,6 +336,7 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
             guard !$0.cancelled, $0.observation?.id == observationID else { return nil as ReadinessObservation? }
             let observation = $0.observation
             $0.observation = nil
+            $0.readinessResolved = true
             return observation
         }
         guard let observation else { return }

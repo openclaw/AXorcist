@@ -495,6 +495,48 @@ extension WorkspaceApplicationMonitorTests {
         monitor.stop()
     }
 
+    @Test
+    func `settled wrappers are not re-read when other applications launch or quit`() async {
+        let probe = ApplicationMetadataProbe()
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let countRead: @Sendable () -> Void = { reads.withLock { $0 += 1 } }
+        let applications = (1...50).map {
+            MonitorApplication(
+                instance: "app-\($0)",
+                pid: pid_t($0),
+                probe: probe,
+                constantHash: true,
+                onPIDRead: countRead)
+        }
+        let added = MonitorApplication(
+            instance: "added",
+            pid: 51,
+            probe: probe,
+            constantHash: true,
+            onPIDRead: countRead)
+        let workspace = MonitorWorkspace(applications: applications)
+        let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
+        var launches: [pid_t] = []
+        var terminations: [pid_t] = []
+        monitor.start(onLaunch: { launches.append($0) }, onTermination: { terminations.append($0) })
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 50)
+
+        reads.withLock { $0 = 0 }
+        workspace.applications = applications + [added]
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 1)
+
+        reads.withLock { $0 = 0 }
+        workspace.applications = applications
+        await workspace.flushMetadata()
+        #expect(reads.withLock { $0 } == 0)
+        #expect(launches == (1...51).map { pid_t($0) })
+        #expect(terminations == [51])
+        #expect(monitor.runningProcessIdentifiers.sorted() == (1...50).map { pid_t($0) })
+        monitor.stop()
+    }
+
     @Test(arguments: ObservationEnd.allCases)
     private func `readiness lease retains the exact wrapper through queued invalidation`(_ end: ObservationEnd) async {
         let probe = ApplicationMetadataProbe()
