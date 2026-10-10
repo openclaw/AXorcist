@@ -495,8 +495,9 @@ extension WorkspaceApplicationMonitorTests {
         monitor.stop()
     }
 
-    @Test
-    func `settled wrappers are not re-read when other applications launch or quit`() async {
+    // Many system processes never report finished launching; their PIDs must not be re-read either.
+    @Test(arguments: [true, false])
+    func `resolved wrappers are not re-read when other applications launch or quit`(_ ready: Bool) async {
         let probe = ApplicationMetadataProbe()
         let reads = OSAllocatedUnfairLock(initialState: 0)
         let countRead: @Sendable () -> Void = { reads.withLock { $0 += 1 } }
@@ -504,6 +505,7 @@ extension WorkspaceApplicationMonitorTests {
             MonitorApplication(
                 instance: "app-\($0)",
                 pid: pid_t($0),
+                ready: ready,
                 probe: probe,
                 constantHash: true,
                 onPIDRead: countRead)
@@ -511,6 +513,7 @@ extension WorkspaceApplicationMonitorTests {
         let added = MonitorApplication(
             instance: "added",
             pid: 51,
+            ready: ready,
             probe: probe,
             constantHash: true,
             onPIDRead: countRead)
