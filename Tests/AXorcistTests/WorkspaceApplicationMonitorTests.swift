@@ -495,7 +495,7 @@ extension WorkspaceApplicationMonitorTests {
         monitor.stop()
     }
 
-    // Many system processes never report finished launching; their PIDs must not be re-read either.
+    /// Many system processes never report finished launching; their PIDs must not be re-read either.
     @Test(arguments: [true, false])
     func `resolved wrappers are not re-read when other applications launch or quit`(_ ready: Bool) async {
         let probe = ApplicationMetadataProbe()
