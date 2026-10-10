@@ -36,8 +36,11 @@ final class AXWorkspaceApplicationMonitor: AXGlobalApplicationMonitoring {
     }
 
     var runningProcessIdentifiers: [pid_t] {
-        Array(self.applicationsByIdentity.values)
+        self.entriesByID.values.compactMap(\.pid)
     }
+
+    /// Internal test seam for metadata work delivered to the main queue.
+    var didReceivePID: ((pid_t) -> Void)?
 
     func start(
         onLaunch: @escaping @MainActor (pid_t) -> Void,
@@ -60,11 +63,11 @@ final class AXWorkspaceApplicationMonitor: AXGlobalApplicationMonitoring {
         self.sessionID = nil
         self.runningApplicationsObservation?.invalidate()
         self.runningApplicationsObservation = nil
-        for request in self.metadataRequests.values {
-            request.cancel()
+        for entry in self.entriesByID.values {
+            entry.request.cancel()
         }
-        self.metadataRequests = [:]
-        self.applicationsByIdentity = [:]
+        self.entriesByIdentity = [:]
+        self.entriesByID = [:]
         self.onLaunch = nil
         self.onTermination = nil
     }
@@ -75,78 +78,118 @@ final class AXWorkspaceApplicationMonitor: AXGlobalApplicationMonitoring {
     private var runningApplicationsObservation: NSKeyValueObservation?
     // Reuse one serial worker across sessions: a blocked read never creates replacement workers.
     private let metadataQueue = DispatchQueue(label: "AXorcist.workspace-application-metadata")
-    private var metadataRequests: [NSRunningApplication: AXApplicationMetadataRequest] = [:]
-    // Retain AppKit's semantic application keys: separate wrappers for one process instance
-    // compare equal, while a replacement process remains a distinct application identity.
-    private var applicationsByIdentity: [NSRunningApplication: pid_t] = [:]
+    private var entriesByIdentity: [ObjectIdentifier: ApplicationEntry] = [:]
+    private var entriesByID: [UUID: ApplicationEntry] = [:]
     private var onLaunch: (@MainActor (pid_t) -> Void)?
     private var onTermination: (@MainActor (pid_t) -> Void)?
 
+    private final class ApplicationEntry {
+        // Retain every indexed wrapper; ObjectIdentifier is only valid during its lifetime.
+        var applications: [NSRunningApplication]
+        let request: AXApplicationMetadataRequest
+        var pid: pid_t?
+
+        init(application: NSRunningApplication, request: AXApplicationMetadataRequest) {
+            self.applications = [application]
+            self.request = request
+        }
+    }
+
     isolated deinit {
-        for request in self.metadataRequests.values {
-            request.cancel()
+        for entry in self.entriesByID.values {
+            entry.request.cancel()
         }
     }
 
     private func reconcile(_ runningApplications: [NSRunningApplication], sessionID: UUID) {
         // Process every complete snapshot in order, even when an earlier metadata read is blocked.
         // Membership removal invalidates its request before a late PID/readiness result can arrive.
-        let currentApplications = Set(runningApplications)
-        let removedApplications = self.metadataRequests.keys.filter { !currentApplications.contains($0) }
+        let currentEntries = self.matchApplications(runningApplications, sessionID: sessionID)
+        let currentIDs = Set(currentEntries.values.map(\.request.id))
+        let removedEntries = self.entriesByID.values.filter { !currentIDs.contains($0.request.id) }
         var terminations: [pid_t] = []
-        for application in removedApplications {
-            self.metadataRequests.removeValue(forKey: application)?.cancel()
-            if let pid = self.applicationsByIdentity.removeValue(forKey: application) {
+        for entry in removedEntries {
+            self.entriesByID.removeValue(forKey: entry.request.id)
+            entry.request.cancel()
+            if let pid = entry.pid {
                 terminations.append(pid)
             }
         }
+        // Re-key to this snapshot, dropping old aliases before releasing their wrappers.
+        self.entriesByIdentity = [:]
+        let wrappersByID = Dictionary(grouping: runningApplications) {
+            currentEntries[ObjectIdentifier($0)]!.request.id
+        }
+        for (id, applications) in wrappersByID {
+            self.entriesByID[id]?.applications = applications
+        }
+        self.entriesByIdentity = currentEntries
         for pid in terminations.sorted() {
             guard self.sessionID == sessionID else { return }
             self.onTermination?(pid)
         }
         for application in runningApplications {
             guard self.sessionID == sessionID else { return }
-            let request: AXApplicationMetadataRequest
-            if let existing = self.metadataRequests[application] {
-                request = existing
-            } else {
-                let requestID = UUID()
-                request = AXApplicationMetadataRequest(
-                    id: requestID,
-                    queue: self.metadataQueue)
-                { [weak self] event in
-                    guard let self, self.sessionID == sessionID,
-                          self.metadataRequests[application]?.id == requestID else { return }
-                    self.receive(event, from: application)
-                }
-                self.metadataRequests[application] = request
-            }
-            request.refresh(application)
+            self.entriesByIdentity[ObjectIdentifier(application)]?.request.refresh(application)
         }
     }
 
-    private func receive(_ event: AXApplicationMetadataRequest.Event, from application: NSRunningApplication) {
+    private func matchApplications(
+        _ applications: [NSRunningApplication],
+        sessionID: UUID) -> [ObjectIdentifier: ApplicationEntry]
+    {
+        var current: [ObjectIdentifier: ApplicationEntry] = [:]
+        for application in applications {
+            let identity = ObjectIdentifier(application)
+            current[identity] = self.entriesByIdentity[identity]
+        }
+        // AppKit can give every NSRunningApplication the same hash. Only unseen wrappers
+        // need semantic equality; a normal launch costs one scan and a removal costs none.
+        for application in applications where current[ObjectIdentifier(application)] == nil {
+            let entry = self.entriesByID.values.first { $0.applications[0] == application }
+                ?? self.makeEntry(for: application, sessionID: sessionID)
+            current[ObjectIdentifier(application)] = entry
+        }
+        return current
+    }
+
+    private func makeEntry(for application: NSRunningApplication, sessionID: UUID) -> ApplicationEntry {
+        let requestID = UUID()
+        let request = AXApplicationMetadataRequest(id: requestID, queue: self.metadataQueue) { [weak self] event in
+            guard let self, self.sessionID == sessionID,
+                  let entry = self.entriesByID[requestID] else { return }
+            self.receive(event, from: entry)
+        }
+        let entry = ApplicationEntry(application: application, request: request)
+        self.entriesByID[requestID] = entry
+        return entry
+    }
+
+    private func receive(_ event: AXApplicationMetadataRequest.Event, from entry: ApplicationEntry) {
         switch event {
         case let .pid(pid):
+            self.didReceivePID?(pid)
             guard pid > 0 else {
-                if let previous = self.applicationsByIdentity.removeValue(forKey: application) {
+                if let previous = entry.pid {
+                    entry.pid = nil
                     self.onTermination?(previous)
                 }
                 return
             }
-            let previous = self.applicationsByIdentity.updateValue(pid, forKey: application)
+            let previous = entry.pid
+            entry.pid = pid
             if previous == nil {
                 self.onLaunch?(pid)
             }
         case .ready:
-            guard let pid = self.applicationsByIdentity[application] else { return }
+            guard let pid = entry.pid else { return }
             self.onLaunch?(pid)
         }
     }
 }
 
 /// AppKit documents NSRunningApplication as thread-safe and the SDK marks it Sendable.
-/// Only cancellation/observation ownership uses the lock; native calls always run outside it.
+/// Request state uses the lock; native calls always run outside it.
 private final nonisolated class AXApplicationMetadataRequest: Sendable {
     enum Event: Sendable {
         case pid(pid_t)
@@ -156,6 +199,7 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
     private struct State {
         var cancelled = false
         var readinessStarted = false
+        var lastDeliveredPID: pid_t?
         var observation: ReadinessObservation?
     }
 
@@ -203,8 +247,15 @@ private final nonisolated class AXApplicationMetadataRequest: Sendable {
         self.queue.async { [self] in
             guard !self.isCancelled else { return }
             let pid = application.processIdentifier
+            let shouldDeliverPID = self.state.withLock {
+                guard !$0.cancelled, pid <= 0 || $0.lastDeliveredPID != pid else { return false }
+                $0.lastDeliveredPID = pid
+                return true
+            }
             guard !self.isCancelled else { return }
-            self.send(.pid(pid))
+            if shouldDeliverPID {
+                self.send(.pid(pid))
+            }
             guard pid > 0 else {
                 self.resetReadiness()
                 return
