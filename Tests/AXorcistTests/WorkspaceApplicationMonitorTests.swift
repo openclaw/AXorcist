@@ -499,7 +499,10 @@ extension WorkspaceApplicationMonitorTests {
     @Test(arguments: [true, false])
     func `resolved wrappers are not re-read when other applications launch or quit`(_ ready: Bool) async {
         let probe = ApplicationMetadataProbe()
+        // Wrappers that are still settling may be read again by an overlapping snapshot; only resolved
+        // wrappers must never be re-read, so count their reads separately from the launched application.
         let reads = OSAllocatedUnfairLock(initialState: 0)
+        let addedReads = OSAllocatedUnfairLock(initialState: 0)
         let countRead: @Sendable () -> Void = { reads.withLock { $0 += 1 } }
         let applications = (1...50).map {
             MonitorApplication(
@@ -516,19 +519,20 @@ extension WorkspaceApplicationMonitorTests {
             ready: ready,
             probe: probe,
             constantHash: true,
-            onPIDRead: countRead)
+            onPIDRead: { addedReads.withLock { $0 += 1 } })
         let workspace = MonitorWorkspace(applications: applications)
         let monitor = AXWorkspaceApplicationMonitor(workspace: workspace, runningApplications: \.applications)
         var launches: [pid_t] = []
         var terminations: [pid_t] = []
         monitor.start(onLaunch: { launches.append($0) }, onTermination: { terminations.append($0) })
         await workspace.flushMetadata()
-        #expect(reads.withLock { $0 } == 50)
+        #expect(reads.withLock { $0 } >= 50)
 
         reads.withLock { $0 = 0 }
         workspace.applications = applications + [added]
         await workspace.flushMetadata()
-        #expect(reads.withLock { $0 } == 1)
+        #expect(reads.withLock { $0 } == 0)
+        #expect(addedReads.withLock { $0 } >= 1)
 
         reads.withLock { $0 = 0 }
         workspace.applications = applications
