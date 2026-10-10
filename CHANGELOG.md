@@ -4,6 +4,10 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-10
+
+**Highlights:** Stop idle global observers from burning CPU whenever other applications launch or quit, honor request timeouts in `collectAll`, subscribe to every requested notification, and report fast observer-removal failures without retrying in-call.
+
 ### Fixed
 - Report a failed native removal from the deprecated `AXObserverManager.removeObserver(for:notification:)` every time and keep the registration for an explicit retry; a removal that failed before the call began waiting was previously retried inside the same call and could report success.
 - Stop idle global observers from burning CPU when unrelated applications launch or quit: index workspace applications by identity instead of `NSRunningApplication`'s constant hash, and stop re-reading resolved PIDs on every snapshot (each launch invalidated AppKit's cached LaunchServices metadata for every application). An idle `peekaboo mcp` with ~600 running applications drops from ~0.68 s to ~0.02 s of CPU per launch and quit (openclaw/Peekaboo#1005).
