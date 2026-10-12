@@ -1,0 +1,445 @@
+name: Release
+'on':
+  push:
+    tags:
+    - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: X.Y.Z matching the current VERSION and dated CHANGELOG section
+        required: true
+        type: string
+      dry_run:
+        description: Sign, notarize and verify without publishing (dispatch must remain true)
+        type: boolean
+        default: true
+permissions: {}
+concurrency:
+  group: release-${{ github.repository }}-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      object: ${{ steps.resolve.outputs.object }}
+      dry: ${{ steps.resolve.outputs.dry }}
+    steps:
+    - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      id: resolve
+      env:
+        VERSION: ${{ inputs.version || github.ref_name }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      with:
+        script: |2
+
+          const version=(process.env.VERSION||'').replace(/^v/,'');
+          if(!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Expected X.Y.Z');
+          const dry=context.eventName==='workflow_dispatch' && process.env.DRY_RUN==='true';
+          if(context.eventName==='workflow_dispatch' && !dry) throw new Error('Publish by pushing an SSH-signed annotated tag; dispatch is rehearsal only');
+          const tag=`v${version}`;
+          const repo=(await github.rest.repos.get(context.repo)).data;
+          const branch=(await github.rest.repos.getBranch({...context.repo,branch:repo.default_branch})).data;
+          if(!branch.protected) throw new Error('Default branch must be protected');
+          let object='';
+          if(dry) {
+            if(context.ref!==`refs/heads/${repo.default_branch}`||context.sha!==branch.commit.sha) throw new Error('Rehearse current protected main');
+          } else {
+            if(context.ref!==`refs/tags/${tag}`) throw new Error('Tag mismatch');
+            const ref=(await github.rest.git.getRef({...context.repo,ref:`tags/${tag}`})).data;
+            if(ref.object.type!=='tag') throw new Error('Annotated tag required');
+            object=ref.object.sha;
+            const t=(await github.rest.git.getTag({...context.repo,tag_sha:object})).data;
+            if(t.object.type!=='commit'||t.object.sha!==context.sha) throw new Error('Tag commit mismatch');
+            const comparison=(await github.rest.repos.compareCommitsWithBasehead({...context.repo,basehead:`${context.sha}...${branch.commit.sha}`,per_page:1})).data;
+            if(!['ahead','identical'].includes(comparison.status)) throw new Error('Tag is outside protected main');
+            try { await github.rest.repos.getReleaseByTag({...context.repo,tag}); throw new Error('Version already released'); }
+            catch(e) { if(e.status!==404) throw e; }
+          }
+          core.setOutput('version',version);core.setOutput('tag',tag);core.setOutput('object',object);core.setOutput('dry',String(dry));
+  source-proof:
+    needs: resolve
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      statuses: read
+    uses: openclaw/release-workflows/.github/workflows/release-source.yml@v1
+    with:
+      version: ${{ needs.resolve.outputs.version }}
+      dry_run: true
+      source-archives: true
+      require-signed-tag: true
+      strict-checks: true
+      ci-check-events: '["push"]'
+  build:
+    needs:
+    - resolve
+    - source-proof
+    runs-on: macos-15
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.raw.outputs.artifact-id }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ github.sha }}
+    - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
+      with:
+        xcode-version: '26.3'
+    - name: Build frozen universal executable and notes
+      env:
+        RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      run: |2
+
+        set -euo pipefail
+        [[ "$(cat VERSION)" == "$RELEASE_VERSION" ]]
+        source_version=$(sed -n 's/.*axorcVersion = "\([^"]*\)".*/\1/p' Sources/axorc/Models/AXORCModels.swift)
+        [[ "$source_version" == "$RELEASE_VERSION" ]]
+        .github/scripts/release-metadata.sh
+        swift build -c release --jobs 2 --arch arm64 --arch x86_64 --product axorc
+        bin_dir=$(swift build -c release --jobs 2 --arch arm64 --arch x86_64 --product axorc --show-bin-path)
+        mkdir raw
+        install -m 755 "$bin_dir/axorc" raw/axorc
+        strip -x raw/axorc
+        chmod 755 raw/axorc
+        for arch in arm64 x86_64; do lipo raw/axorc -verify_arch "$arch"; done
+        raw/axorc --version | grep -Fx "axorc $RELEASE_VERSION"
+        raw/axorc --help >/dev/null
+        cp "$RUNNER_TEMP/RELEASE-NOTES.md" raw/
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      id: raw
+      with:
+        name: raw-${{ github.run_id }}-${{ github.run_attempt }}
+        path: raw
+        if-no-files-found: error
+        retention-days: 30
+  sign:
+    needs:
+    - resolve
+    - build
+    runs-on: macos-15
+    permissions:
+      actions: read
+    timeout-minutes: 110
+    outputs:
+      artifact-id: ${{ steps.payload.outputs.artifact-id }}
+    steps:
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        artifact-ids: ${{ needs.build.outputs.artifact-id }}
+        path: raw
+        merge-multiple: true
+    - name: Import policy signer into ephemeral keychain
+      id: signer
+      env:
+        P12_BASE64: ${{ secrets.MACOS_SIGNING_P12 }}
+        P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        REPOSITORY_TYPE: openclaw
+      run: |
+        set -euo pipefail
+        keychain="$RUNNER_TEMP/swift-release.keychain-db"
+        password=$(openssl rand -hex 32)
+        p12="$RUNNER_TEMP/swift-release.p12"
+        certificate="$RUNNER_TEMP/swift-release-certificate.pem"
+        private_key="$RUNNER_TEMP/swift-release-private-key.pem"
+        trap 'rm -f "$p12" "$certificate" "$private_key"' EXIT
+        printf '%s' "$P12_BASE64" | base64 --decode >"$p12"
+        pkcs12_legacy=0
+        if openssl pkcs12 -help 2>&1 | grep -q -- '-legacy'; then
+          pkcs12_legacy=1
+        fi
+        extract_pkcs12() {
+          if (( pkcs12_legacy )); then
+            openssl pkcs12 -legacy "$@"
+          else
+            openssl pkcs12 "$@"
+          fi
+        }
+        extract_pkcs12 -in "$p12" -clcerts -nokeys -out "$certificate" -passin env:P12_PASSWORD
+        extract_pkcs12 -in "$p12" -nocerts -nodes -out "$private_key" -passin env:P12_PASSWORD
+        chmod 600 "$p12" "$certificate" "$private_key"
+        # Creating a keychain can change the search list before signer setup completes.
+        original_keychains=$(security list-keychains -d user)
+        printf '%s\n' "$original_keychains" | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//' >"$RUNNER_TEMP/swift-original-keychains.txt"
+        security create-keychain -p "$password" "$keychain"
+        security set-keychain-settings -lut 21600 "$keychain"
+        security unlock-keychain -p "$password" "$keychain"
+        security list-keychains -d user -s "$keychain"
+        security import "$certificate" -k "$keychain"
+        security import "$private_key" -k "$keychain" -T /usr/bin/codesign -T /usr/bin/security
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+        if [[ "$REPOSITORY_TYPE" == openclaw ]]; then
+          team=FWJYW4S8P8
+          authority="Developer ID Application: OpenClaw Foundation ($team)"
+        else
+          team=Y5PE65HELJ
+          authority="Developer ID Application: Peter Steinberger ($team)"
+        fi
+        identity=$(security find-identity -v -p codesigning "$keychain" | awk -v authority="$authority" 'index($0, "\"" authority "\"") && $2 ~ /^[0-9A-Fa-f]{40}$/ { print $2; exit }')
+        [[ "$identity" =~ ^[0-9A-Fa-f]{40}$ ]] || { echo "required signing identity missing: $authority" >&2; exit 1; }
+        {
+          echo "authority=$authority"
+          echo "identity=$identity"
+          echo "keychain=$keychain"
+          echo "team=$team"
+        } >>"$GITHUB_OUTPUT"
+        rm -f "$p12"
+    - name: Sign, notarize and freeze all three archives
+      env:
+        KEYCHAIN: ${{ steps.signer.outputs.keychain }}
+        IDENTITY: ${{ steps.signer.outputs.identity }}
+        RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        ASC_PRIVATE_KEY_P8: ${{ secrets.ASC_PRIVATE_KEY_P8 }}
+      run: |2
+
+        set -euo pipefail
+        key="$RUNNER_TEMP/AuthKey.p8"
+        trap 'rm -f "$key"' EXIT
+        umask 077
+        printf '%s' "$ASC_PRIVATE_KEY_P8" > "$key"
+        requirement='identifier "axorc" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "FWJYW4S8P8"'
+        codesign --force --timestamp --options runtime --identifier axorc --requirements "=designated => $requirement" --keychain "$KEYCHAIN" --sign "$IDENTITY" raw/axorc
+        chmod 755 raw/axorc
+        codesign --verify --strict -R="$requirement" raw/axorc
+        mkdir payload
+        cp raw/RELEASE-NOTES.md payload/
+        for arch in universal arm64 x86_64; do
+          stage="$RUNNER_TEMP/$arch"
+          mkdir "$stage"
+          if [[ "$arch" == universal ]]; then
+            cp raw/axorc "$stage/axorc"
+          else
+            lipo raw/axorc -thin "$arch" -output "$stage/axorc"
+          fi
+          chmod 755 "$stage/axorc"
+          codesign --verify --strict -R="$requirement" "$stage/axorc"
+          archive="axorc-$RELEASE_VERSION-macos-$arch.zip"
+          (cd "$stage" && ditto --norsrc -c -k axorc "$GITHUB_WORKSPACE/payload/$archive")
+          xcrun notarytool submit "payload/$archive" --key "$key" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m
+          codesign --verify --strict --check-notarization -R=notarized "$stage/axorc"
+          (cd payload && shasum -a 256 "$archive" > "$archive.sha256")
+        done
+        python3 - <<'INVENTORY'
+        import hashlib,json,os,pathlib
+        p=pathlib.Path('payload')
+        a=[dict(name=f.name,size=f.stat().st_size,sha256=hashlib.sha256(f.read_bytes()).hexdigest()) for f in sorted(p.iterdir())]
+        (p/'ASSET-INVENTORY.json').write_text(json.dumps(dict(repository=os.environ['GITHUB_REPOSITORY'],commit=os.environ['GITHUB_SHA'],tag='v'+os.environ['RELEASE_VERSION'],assets=a),indent=2)+'\n')
+        (p/'SHA256SUMS').write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in sorted(p.iterdir())))
+        INVENTORY
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      id: payload
+      with:
+        name: signed-${{ github.run_id }}-${{ github.run_attempt }}
+        path: payload
+        if-no-files-found: error
+        retention-days: 30
+    - name: Restore keychain state
+      if: always()
+      run: |2
+
+        set -euo pipefail
+        if [[ -f "$RUNNER_TEMP/swift-original-keychains.txt" ]]; then
+          keychains=()
+          while IFS= read -r keychain; do [[ -z "$keychain" ]] || keychains+=("$keychain"); done < "$RUNNER_TEMP/swift-original-keychains.txt"
+          security list-keychains -d user -s "${keychains[@]}" || true
+        fi
+        security delete-keychain "$RUNNER_TEMP/swift-release.keychain-db" || true
+        rm -f "$RUNNER_TEMP/swift-release.p12" "$RUNNER_TEMP/swift-release-certificate.pem" "$RUNNER_TEMP/swift-release-private-key.pem" "$RUNNER_TEMP/AuthKey.p8"
+  verify:
+    needs:
+    - resolve
+    - sign
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: macos-15
+          arch: arm64
+        - runner: macos-15-intel
+          arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      actions: read
+    timeout-minutes: 20
+    steps:
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        artifact-ids: ${{ needs.sign.outputs.artifact-id }}
+        path: payload
+        merge-multiple: true
+    - name: Verify bytes, signatures, tickets and native smoke
+      env:
+        RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      run: |2
+
+        set -euo pipefail
+        python3 - <<'VERIFY'
+        import hashlib,json,os,pathlib,stat,zipfile
+        p=pathlib.Path('payload'); v=os.environ['RELEASE_VERSION']
+        i=json.loads((p/'ASSET-INVENTORY.json').read_text())
+        assert (i['repository'],i['commit'],i['tag'])==(os.environ['GITHUB_REPOSITORY'],os.environ['GITHUB_SHA'],'v'+v)
+        archives={f'axorc-{v}-macos-{a}.zip' for a in ('universal','arm64','x86_64')}
+        expected=archives|{a+'.sha256' for a in archives}|{'RELEASE-NOTES.md'}
+        assert {a['name'] for a in i['assets']}==expected and len(i['assets'])==len(expected)
+        assert {f.name for f in p.iterdir()}==expected|{'ASSET-INVENTORY.json','SHA256SUMS'}
+        for a in i['assets']:
+         f=p/a['name']; assert f.is_file() and not f.is_symlink()
+         assert f.stat().st_size==a['size'] and hashlib.sha256(f.read_bytes()).hexdigest()==a['sha256']
+        sums=''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in sorted(p.iterdir()) if f.name!='SHA256SUMS')
+        assert (p/'SHA256SUMS').read_text()==sums
+        for name in archives:
+         assert (p/(name+'.sha256')).read_text()==hashlib.sha256((p/name).read_bytes()).hexdigest()+'  '+name+'\n'
+         with zipfile.ZipFile(p/name) as z:
+          assert z.namelist()==['axorc']
+          mode=z.getinfo('axorc').external_attr>>16
+          assert stat.S_ISREG(mode) and stat.S_IMODE(mode)==0o755
+        VERIFY
+        requirement='identifier "axorc" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "FWJYW4S8P8"'
+        for arch in universal arm64 x86_64; do
+          mkdir "$RUNNER_TEMP/$arch"
+          ditto -x -k "payload/axorc-$RELEASE_VERSION-macos-$arch.zip" "$RUNNER_TEMP/$arch"
+          cli="$RUNNER_TEMP/$arch/axorc"
+          codesign --verify --strict -R="$requirement" "$cli"
+          codesign --verify --strict --check-notarization -R=notarized "$cli"
+          signature=$(codesign -dvv "$cli" 2>&1)
+          grep -F 'flags=0x10000(runtime)' <<< "$signature"
+          grep -E '^Timestamp=' <<< "$signature"
+          if [[ "$arch" == universal ]]; then
+            [[ "$(lipo -archs "$cli")" == 'x86_64 arm64' || "$(lipo -archs "$cli")" == 'arm64 x86_64' ]]
+          else
+            [[ "$(lipo -archs "$cli")" == "$arch" ]]
+          fi
+          if [[ "$arch" == universal || "$arch" == "$(uname -m)" ]]; then
+            "$cli" --version | grep -Fx "axorc $RELEASE_VERSION"
+            "$cli" --help >/dev/null
+          fi
+        done
+        mkdir attestation
+        cp payload/ASSET-INVENTORY.json payload/SHA256SUMS attestation/
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: attestation-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: attestation
+        if-no-files-found: error
+        retention-days: 30
+  publish:
+    if: needs.resolve.outputs.dry == 'false'
+    needs:
+    - resolve
+    - sign
+    - verify
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        artifact-ids: ${{ needs.sign.outputs.artifact-id }}
+        path: payload
+        merge-multiple: true
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: attestation-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+        path: attestations/arm64
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: attestation-x86_64-${{ github.run_id }}-${{ github.run_attempt }}
+        path: attestations/x86_64
+    - name: Publish only bytes attested by both verifiers
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      env:
+        TAG: ${{ needs.resolve.outputs.tag }}
+        TAG_OBJECT: ${{ needs.resolve.outputs.object }}
+      with:
+        script: |2
+
+          const fs=require('fs'),path=require('path'),crypto=require('crypto');
+          const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+          const p='payload',inventory=fs.readFileSync(`${p}/ASSET-INVENTORY.json`),sums=fs.readFileSync(`${p}/SHA256SUMS`);
+          for(const arch of ['arm64','x86_64']) for(const name of ['ASSET-INVENTORY.json','SHA256SUMS'])
+           if(!fs.readFileSync(`attestations/${arch}/${name}`).equals(fs.readFileSync(`${p}/${name}`))) throw new Error('Verifier disagreement');
+          const i=JSON.parse(inventory),tag=process.env.TAG;
+          if(i.repository!==`${context.repo.owner}/${context.repo.repo}`||i.commit!==context.sha||i.tag!==tag) throw new Error('Source mismatch');
+          const assets=[...i.assets,{name:'ASSET-INVENTORY.json',sha256:hash(inventory),size:inventory.length},{name:'SHA256SUMS',sha256:hash(sums),size:sums.length}];
+          if(new Set(assets.map(a=>a.name)).size!==assets.length||fs.readdirSync(p).sort().join()!==assets.map(a=>a.name).sort().join()) throw new Error('Payload set differs');
+          for(const a of assets) { const b=fs.readFileSync(path.join(p,a.name)); if(b.length!==a.size||hash(b)!==a.sha256) throw new Error('Payload mismatch'); }
+          async function checkTag(){
+           const ref=(await github.rest.git.getRef({...context.repo,ref:`tags/${tag}`})).data;
+           if(ref.object.type!=='tag'||ref.object.sha!==process.env.TAG_OBJECT) throw new Error('Tag moved');
+           const t=(await github.rest.git.getTag({...context.repo,tag_sha:ref.object.sha})).data;
+           if(t.object.type!=='commit'||t.object.sha!==context.sha) throw new Error('Tag source changed');
+          }
+          await checkTag();
+          try { await github.rest.repos.getReleaseByTag({...context.repo,tag}); throw new Error('Version already released'); } catch(e) { if(e.status!==404) throw e; }
+          const notes=fs.readFileSync(`${p}/RELEASE-NOTES.md`,'utf8');
+          const release=(await github.rest.repos.createRelease({...context.repo,tag_name:tag,target_commitish:context.sha,name:tag,body:notes,draft:true})).data;
+          for(const a of assets) await github.rest.repos.uploadReleaseAsset({...context.repo,release_id:release.id,name:a.name,data:fs.readFileSync(path.join(p,a.name))});
+          const remote=(await github.rest.repos.listReleaseAssets({...context.repo,release_id:release.id,per_page:100})).data;
+          if(remote.length!==assets.length) throw new Error('Remote asset set differs');
+          for(const a of assets){
+           const r=remote.filter(r=>r.name===a.name);if(r.length!==1||r[0].size!==a.size) throw new Error('Remote asset mismatch');
+           const bytes=(await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}',{...context.repo,asset_id:r[0].id,headers:{accept:'application/octet-stream'}})).data;
+           if(hash(Buffer.from(bytes))!==a.sha256) throw new Error('Remote digest mismatch');
+          }
+          await checkTag();
+          const staged=(await github.rest.repos.getRelease({...context.repo,release_id:release.id})).data;
+          if(!staged.draft||staged.tag_name!==tag||staged.body!==notes) throw new Error('Draft changed');
+          await github.rest.repos.updateRelease({...context.repo,release_id:release.id,draft:false});
+          core.summary.addLink('Published release',release.html_url);await core.summary.write();
+  homebrew:
+    needs:
+    - resolve
+    - sign
+    - publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+    steps:
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        artifact-ids: ${{ needs.sign.outputs.artifact-id }}
+        path: payload
+        merge-multiple: true
+    - name: Dispatch and verify the native Homebrew archives
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      env:
+        TAG: ${{ needs.resolve.outputs.tag }}
+      with:
+        github-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        script: |2
+
+          const fs=require('fs');
+          const i=JSON.parse(fs.readFileSync('payload/ASSET-INVENTORY.json'));
+          if(i.repository!==`${context.repo.owner}/${context.repo.repo}`||i.commit!==context.sha||i.tag!==process.env.TAG) throw new Error('Inventory source differs');
+          const tag=process.env.TAG,version=tag.slice(1),request=`axorc-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          const assets={};
+          for(const [target,arch] of [['darwin_arm64','arm64'],['darwin_amd64','x86_64']]){
+           const selected=i.assets.filter(a=>a.name===`axorc-${version}-macos-${arch}.zip`);
+           if(selected.length!==1) throw new Error('Missing native archive');
+           assets[target]={name:selected[0].name,sha256:selected[0].sha256};
+          }
+          const repo={owner:'openclaw',repo:'homebrew-tap'};
+          await github.rest.actions.createWorkflowDispatch({...repo,workflow_id:'update-formula.yml',ref:'main',inputs:{formula:'axorc',tag,repository:i.repository,artifact_template:'axorc-{version}-{target}.zip',target_aliases:'darwin_arm64=macos-arm64,darwin_amd64=macos-x86_64',request_id:request}});
+          let run;
+          for(let attempt=0;attempt<8;attempt++){
+           await new Promise(r=>setTimeout(r,300000));
+           const runs=(await github.rest.actions.listWorkflowRuns({...repo,workflow_id:'update-formula.yml',event:'workflow_dispatch',per_page:100})).data.workflow_runs.filter(r=>r.display_title.includes(request));
+           if(runs.length>1) throw new Error('Ambiguous tap runs');
+           if(runs.length===1){run=runs[0];if(run.status==='completed')break;}
+          }
+          if(!run||run.conclusion!=='success') throw new Error('Tap handoff did not succeed');
+          const file=(await github.rest.repos.getContent({...repo,path:'Formula/axorc.rb',ref:'main'})).data;
+          const formula=Buffer.from(file.content,'base64').toString();
+          for(const a of Object.values(assets)) if(!formula.includes(`https://github.com/${i.repository}/releases/download/${tag}/${a.name}`)||!formula.includes(a.sha256))throw new Error('Tap formula does not match verified release');
+          if(!/skip_clean\s+["']bin\/axorc["']/.test(formula))throw new Error('Tap must preserve code signature');

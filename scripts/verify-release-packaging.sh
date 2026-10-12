@@ -4,14 +4,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-release-artifact.sh <version> [--adhoc]
+Usage: scripts/verify-release-packaging.sh <version>
 
 Builds universal, arm64, and x86_64 dist/axorc-<version>-macos-<arch>.zip
 archives and their SHA-256 files.
 
-Release builds require AXORC_CODESIGN_IDENTITY to name a Developer ID
-Application identity already available in the current keychain. Use --adhoc
-only for local or CI verification; ad-hoc artifacts must not be published.
+Creates ad-hoc artifacts for local or CI verification only.
+Publication, Developer ID signing, and notarization belong to release.yml.
 EOF
 }
 
@@ -22,26 +21,10 @@ fi
 
 version="$1"
 shift
-adhoc=false
-
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Version must use x.y.z form." >&2
+if [[ $# -ne 0 || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Expected one x.y.z version." >&2
   exit 2
 fi
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --adhoc)
-      adhoc=true
-      ;;
-    *)
-      echo "Unknown option: $1" >&2
-      usage >&2
-      exit 2
-      ;;
-  esac
-  shift
-done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -49,11 +32,6 @@ cd "$repo_root"
 source_version="$(sed -n 's/.*axorcVersion = "\([^"]*\)".*/\1/p' Sources/axorc/Models/AXORCModels.swift)"
 if [[ "$source_version" != "$version" ]]; then
   echo "Version mismatch: source has $source_version, requested $version" >&2
-  exit 1
-fi
-
-if [[ "$adhoc" == false && -z "${AXORC_CODESIGN_IDENTITY:-}" ]]; then
-  echo "AXORC_CODESIGN_IDENTITY is required for publishable artifacts." >&2
   exit 1
 fi
 
@@ -68,11 +46,7 @@ for architecture in universal arm64 x86_64; do
 done
 mkdir -p "$stage_dir"
 
-if [[ "$adhoc" == true ]]; then
-  "$repo_root/scripts/build-universal-binary.sh" "$binary_path" --adhoc
-else
-  "$repo_root/scripts/build-universal-binary.sh" "$binary_path"
-fi
+"$repo_root/scripts/build-universal-binary.sh" "$binary_path"
 
 codesign --verify --strict --verbose=2 "$binary_path"
 for architecture in arm64 x86_64; do

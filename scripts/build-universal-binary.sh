@@ -4,11 +4,10 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-universal-binary.sh <output-path> [--adhoc]
+Usage: scripts/build-universal-binary.sh <output-path>
 
-Builds a universal release axorc binary at the requested path. Publishable
-builds require AXORC_CODESIGN_IDENTITY to name a Developer ID Application
-identity. Use --adhoc only for local or CI verification.
+Builds an ad-hoc universal axorc binary for local verification only.
+Developer ID release signing belongs to the GitHub Actions release pipeline.
 EOF
 }
 
@@ -19,25 +18,9 @@ fi
 
 output_path="$1"
 shift
-adhoc=false
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --adhoc)
-      adhoc=true
-      ;;
-    *)
-      echo "Unknown option: $1" >&2
-      usage >&2
-      exit 2
-      ;;
-  esac
-  shift
-done
-
-if [[ "$adhoc" == false && -z "${AXORC_CODESIGN_IDENTITY:-}" ]]; then
-  echo "AXORC_CODESIGN_IDENTITY is required for publishable artifacts." >&2
-  exit 1
+if [[ $# -ne 0 ]]; then
+  usage >&2
+  exit 2
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -63,11 +46,7 @@ mkdir -p "$(dirname "$output_path")"
 install -m 0755 "$built_binary" "$output_path"
 strip -x "$output_path"
 
-if [[ "$adhoc" == true ]]; then
-  codesign --force --sign - "$output_path"
-else
-  codesign --force --options runtime --timestamp --sign "$AXORC_CODESIGN_IDENTITY" "$output_path"
-fi
+codesign --force --sign - "$output_path"
 
 # Rewriting tools can narrow permissions under a restrictive caller umask.
 chmod 0755 "$output_path"

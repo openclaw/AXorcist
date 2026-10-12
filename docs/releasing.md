@@ -1,61 +1,61 @@
-# Releasing `axorc`
+# Releasing AXorcist and axorc
 
-The Homebrew formula consumes a Developer ID-signed binary for the host architecture, or the universal binary for older releases. Do not publish the ad-hoc artifact produced by `--adhoc`; a stable signature keeps the macOS Accessibility identity consistent across upgrades.
+The release workflow publishes the SwiftPM version and three Developer ID-signed,
+notarized CLI archives: universal, arm64 and x86_64. Each archive contains only
+`axorc`, retains mode 0755, and keeps the established `axorc` signing identifier
+and OpenClaw Foundation Team ID. Individual `.sha256` files remain available;
+`SHA256SUMS`, `ASSET-INVENTORY.json`, and the exact changelog notes cover the complete release.
 
-Release packaging also produces smaller `macos-arm64` and `macos-x86_64` archives for Apple Silicon and Intel Macs. Each contains only `axorc`, extracted from the signed universal binary without changing its signature. The universal archive remains available for both architectures.
+## Prepare and rehearse
 
-`scripts/build-universal-binary.sh` restores executable mode `0755` after stripping and signing, regardless of the caller's umask. The release archive preserves that mode. Universal architecture checks invoke `lipo -verify_arch` once per slice for compatibility with Xcode 27. Run `make test-universal-binary-mode` for the source-only permission and argument regression; it mocks build/signing tools and does not replace native signature or archive verification.
+Update `VERSION` and `axorcVersion` in `Sources/axorc/Models/AXORCModels.swift`.
+Finalize exactly one dated `## [X.Y.Z] - YYYY-MM-DD` changelog section, leaving
+`Unreleased` above it. Merge the preparation PR and wait for green push CI on that
+exact protected-main commit. Rehearse with:
 
-## Prepare
+```sh
+gh workflow run release.yml --repo openclaw/AXorcist --ref main -f version=X.Y.Z -F dry_run=true
+```
 
-1. Update `axorcVersion` in `Sources/axorc/Models/AXORCModels.swift` and move the changelog entries into the matching release section.
-2. Run `swift test`, SwiftFormat, SwiftLint, the live CLI smoke checks, and autoreview.
-3. Build with the existing Developer ID Application identity:
+Dispatch is rehearsal-only and defaults to `dry_run: true`; false is rejected.
+The rehearsal runs the shared `release-source@v1` protected-source, version,
+changelog and exact-push-CI gates, builds the universal CLI, signs and notarizes
+all archives, then independently checks them on Apple Silicon and Intel.
+It creates no tag, GitHub Release, or Homebrew dispatch. An existing release for
+the requested version does not redirect the rehearsal away from current main.
 
-   ```bash
-   AXORC_CODESIGN_IDENTITY='Developer ID Application: ...' scripts/build-release-artifact.sh 0.2.2
-   ```
+## Publish
 
-4. Submit each `dist/axorc-0.2.2-macos-*.zip` archive to `notarytool` using the approved release credentials. Wait for acceptance. Zip archives cannot be stapled; verify each downloaded executable's notarization ticket online after publication.
+Push an SSH-signed annotated `vX.Y.Z` tag for the verified protected-main commit,
+using the key authorized by `.github/release-allowed-signers`. Signing key custody
+stays outside Actions. The same build and independent verification run before a
+publisher compares both attestations, stages and downloads every release asset,
+rechecks the immutable tag, and publishes. Existing versions are rejected; never
+move a tag or overwrite a release. A failed draft stays available for inspection;
+resolve it deliberately before retrying, never delete published assets to retry.
 
-### Reuse a hosted build
+The final job dispatches `openclaw/homebrew-tap` using its archive-template
+contract for the native ZIP files, waits for the matching run, and checks the
+result against the exact verified archive names and hashes. It verifies the resulting
+formula preserves those URLs, hashes, and `skip_clean "bin/axorc"`. Verify the
+workflow, public downloads, and a clean `brew install openclaw/tap/axorc` after
+release. Keep networking enabled for standalone executable notarization checks.
 
-CI retains its verified ad-hoc packaging archives for seven days. To avoid a local build, download the artifact from the successful run for the exact release source revision (a PR merge commit is suitable only when its tree matches the release commit). Verify the archived checksums, extract the universal executable, and replace its ad-hoc signature using `codesign --force --options runtime --timestamp --sign "$AXORC_CODESIGN_IDENTITY" axorc`. Restore mode `0755` and verify the Developer ID requirement, both architectures, `--version`, and `--help`. Extract the thin executables from that signed universal binary with `lipo -thin`, then recreate all three zip archives and checksums as in `scripts/build-release-artifact.sh`.
+## Why a repository-owned binary workflow
 
-These are new release artifacts: notarize each rebuilt archive and follow every publication and download verification step below. Never publish the ad-hoc CI archives directly.
+The current `release-swift-cli@v1` requires an imsg-specific helper dylib and Linux
+archive, has no no-publish rehearsal input, and cannot retain this project's
+three established versioned macOS archives. AXorcist is macOS-only and has no
+helper dylib. Its workflow therefore reuses `release-source@v1` for the shared
+source gate and owns only the required binary signing, verification and tap
+handoff. Actions are SHA-pinned and write/signing credentials are isolated from
+build and verifier jobs. No npm or Sparkle channel exists.
 
-## Publish and update Homebrew
+Required repository secrets: `MACOS_SIGNING_P12`, `MACOS_SIGNING_P12_PASSWORD`,
+`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY_P8`, `HOMEBREW_TAP_TOKEN`.
 
-1. Upload all three zips and their `.sha256` files to the matching GitHub Release.
-2. Download each public artifact into a clean temporary directory. Verify its checksum, advertised architectures, stable signature, and executable mode. Run `--version` and `--help` on a matching host. Verify the standalone executable's notarization ticket with:
+## Local checks
 
-   ```bash
-   codesign -vvvv -R="notarized" --check-notarization axorc
-   ```
-
-   `spctl --assess --type execute` is an app assessment and can reject valid standalone executables as not being apps. Follow Apple's [Testing a Notarised Product](https://developer.apple.com/forums/thread/130560) guidance for other code, and also test the actual install and launch on a fresh Mac or VM. Keep networking enabled because the zip cannot carry a stapled ticket.
-3. Render the formula from the directory containing the public archives and checksum files verified above:
-
-   ```bash
-   scripts/render-homebrew-formula.sh 0.2.2 --artifacts <verified-directory> > axorc.rb
-   ```
-
-   The renderer checks each checksum against its archive and selects thin downloads only when both architecture pairs are present. An incomplete set fails. A directory with only the universal pair, or the existing `scripts/render-homebrew-formula.sh 0.1.10 <sha256>` invocation, renders a universal formula for older releases. Rendering does not replace the signature and notarization checks above or publish anything.
-
-4. Add `axorc.rb` to `openclaw/homebrew-tap`, then run `brew audit --strict openclaw/tap/axorc`, `brew install --build-from-source openclaw/tap/axorc`, `brew test openclaw/tap/axorc`, `axorc --version`, `axorc --help`, and `axorc permissions` on a clean host for each architecture.
-5. Confirm Homebrew preserved the published executable byte-for-byte and retained its Developer ID requirement:
-
-   ```bash
-   cmp axorc "$(brew --prefix axorc)/bin/axorc"
-   codesign --verify --strict "$(brew --prefix axorc)/bin/axorc"
-   codesign -d -r- "$(brew --prefix axorc)/bin/axorc"
-   ```
-
-   The designated requirement must contain `anchor apple generic`; an ad-hoc requirement is a release blocker.
-6. After the tap change lands, update the README with `brew install openclaw/tap/axorc` and verify a fresh public installation.
-
-## Close out
-
-- Confirm the GitHub Release contains the signed universal, arm64, and x86_64 archives and their checksums.
-- Confirm the Homebrew formula uses the public archive URL and exact checksum.
-- Open the next patch `Unreleased` section and commit it.
+`make check` retains source-only regressions. `make verify-release-packaging VERSION=X.Y.Z` builds ad-hoc packaging fixtures; these cannot be published.
+The former local Developer ID and manual publishing path has been removed.
+Read-only formula rendering and checksum verification remain available.

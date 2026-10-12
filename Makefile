@@ -8,7 +8,7 @@ UNIVERSAL_BINARY_PATH = ./$(BINARY_NAME)
 all:
 	@echo "Cleaning old binary..."
 	rm -f $(UNIVERSAL_BINARY_PATH)
-	./scripts/build-universal-binary.sh $(UNIVERSAL_BINARY_PATH) --adhoc
+	./scripts/build-universal-binary.sh $(UNIVERSAL_BINARY_PATH)
 	@echo "Build complete: $(UNIVERSAL_BINARY_PATH)"
 	@ls -l $(UNIVERSAL_BINARY_PATH)
 
@@ -19,13 +19,9 @@ clean:
 	rm -f $(UNIVERSAL_BINARY_PATH)
 	@echo "Clean complete."
 
-release-artifact:
+verify-release-packaging:
 	@test -n "$(VERSION)" || (echo "VERSION is required" >&2; exit 2)
-	@if test "$(ADHOC)" = "1"; then \
-		./scripts/build-release-artifact.sh "$(VERSION)" --adhoc; \
-	else \
-		./scripts/build-release-artifact.sh "$(VERSION)"; \
-	fi
+	./scripts/verify-release-packaging.sh "$(VERSION)"
 
 # Format code with SwiftFormat
 format:

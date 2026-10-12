@@ -65,6 +65,10 @@ jobs:
         scripts/install-validation-tools.sh "$validation_tools_dir"
         echo "$validation_tools_dir" >> "$GITHUB_PATH"
     
+    - name: Verify release workflow boundaries
+      if: matrix.validate
+      run: node --test .github/scripts/test-release-workflow.mjs
+
     - name: Run safe tests
       run: swift test
     
@@ -79,7 +83,7 @@ jobs:
         shellcheck scripts/*.sh
         version="$(sed -n 's/.*axorcVersion = "\([^"]*\)".*/\1/p' Sources/axorc/Models/AXORCModels.swift)"
         umask 077
-        scripts/build-release-artifact.sh "$version" --adhoc
+        scripts/verify-release-packaging.sh "$version"
         verify_dir="$(mktemp -d)"
         trap 'rm -rf "$verify_dir"' EXIT
         for architecture in universal arm64 x86_64; do

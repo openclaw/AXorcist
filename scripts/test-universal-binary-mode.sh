@@ -59,19 +59,15 @@ done
 
 failed=0
 for narrow_tool in strip codesign; do
-    for signing_mode in adhoc developer-id; do
+    for signing_mode in adhoc; do
         case_dir="$fixture_root/$narrow_tool-$signing_mode"
         binary="$case_dir/output directory/axorc"
         mkdir -p "$case_dir"
         args=("$binary")
-        if [[ "$signing_mode" == adhoc ]]; then
-            args+=(--adhoc)
-        fi
         if ! output="$(
             umask 077
             env -i \
                 PATH="$mock_bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-                AXORC_CODESIGN_IDENTITY='Fixture identity (mock only)' \
                 AXORCIST_TEST_BUILD_DIR="$fixture_root/build output" \
                 AXORCIST_TEST_STATE="$case_dir" \
                 AXORCIST_TEST_NARROW_TOOL="$narrow_tool" \
