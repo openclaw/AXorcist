@@ -202,6 +202,20 @@ jobs:
       run: |2
 
         set -euo pipefail
+        verify_notarization() {
+          local attempt
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if codesign --verify --strict --check-notarization -R=notarized "$1"; then
+              return 0
+            fi
+            if ((attempt == 30)); then
+              echo "Notarization ticket remained unverifiable after 30 attempts" >&2
+              return 1
+            fi
+            echo "Waiting for Apple's notarization ticket ($attempt/30)"
+            sleep 10
+          done
+        }
         key="$RUNNER_TEMP/AuthKey.p8"
         trap 'rm -f "$key"' EXIT
         umask 077
@@ -225,7 +239,7 @@ jobs:
           archive="axorc-$RELEASE_VERSION-macos-$arch.zip"
           (cd "$stage" && ditto --norsrc -c -k axorc "$GITHUB_WORKSPACE/payload/$archive")
           xcrun notarytool submit "payload/$archive" --key "$key" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m
-          codesign --verify --strict --check-notarization -R=notarized "$stage/axorc"
+          verify_notarization "$stage/axorc"
           (cd payload && shasum -a 256 "$archive" > "$archive.sha256")
         done
         python3 - <<'INVENTORY'
@@ -282,6 +296,20 @@ jobs:
       run: |2
 
         set -euo pipefail
+        verify_notarization() {
+          local attempt
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if codesign --verify --strict --check-notarization -R=notarized "$1"; then
+              return 0
+            fi
+            if ((attempt == 30)); then
+              echo "Notarization ticket remained unverifiable after 30 attempts" >&2
+              return 1
+            fi
+            echo "Waiting for Apple's notarization ticket ($attempt/30)"
+            sleep 10
+          done
+        }
         python3 - <<'VERIFY'
         import hashlib,json,os,pathlib,stat,zipfile
         p=pathlib.Path('payload'); v=os.environ['RELEASE_VERSION']
@@ -309,7 +337,7 @@ jobs:
           ditto -x -k "payload/axorc-$RELEASE_VERSION-macos-$arch.zip" "$RUNNER_TEMP/$arch"
           cli="$RUNNER_TEMP/$arch/axorc"
           codesign --verify --strict -R="$requirement" "$cli"
-          codesign --verify --strict --check-notarization -R=notarized "$cli"
+          verify_notarization "$cli"
           signature=$(codesign -dvv "$cli" 2>&1)
           grep -F 'flags=0x10000(runtime)' <<< "$signature"
           grep -E '^Timestamp=' <<< "$signature"
