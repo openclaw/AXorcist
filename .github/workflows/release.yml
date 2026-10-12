@@ -127,7 +127,7 @@ jobs:
     runs-on: macos-15
     permissions:
       actions: read
-    timeout-minutes: 110
+    timeout-minutes: 180
     outputs:
       artifact-id: ${{ steps.payload.outputs.artifact-id }}
     steps:
@@ -203,17 +203,24 @@ jobs:
 
         set -euo pipefail
         verify_notarization() {
-          local attempt
-          for ((attempt = 1; attempt <= 30; attempt++)); do
-            if codesign --verify --strict --check-notarization -R=notarized "$1"; then
-              return 0
-            fi
-            if ((attempt == 30)); then
-              echo "Notarization ticket remained unverifiable after 30 attempts" >&2
-              return 1
-            fi
-            echo "Waiting for Apple's notarization ticket ($attempt/30)"
-            sleep 10
+          local attempt architecture archs
+          local -a architectures=()
+          archs=$(lipo -archs "$1") || return 1
+          read -r -a architectures <<< "$archs"
+          (( ${#architectures[@]} > 0 )) || return 1
+          for architecture in "${architectures[@]}"; do
+            case "$architecture" in arm64|x86_64) ;; *) return 1 ;; esac
+            for ((attempt = 1; attempt <= 90; attempt++)); do
+              if codesign --verify --strict --check-notarization -R=notarized --architecture "$architecture" "$1"; then
+                break
+              fi
+              if ((attempt == 90)); then
+                echo "Notarization ticket for $architecture remained unverifiable after 90 attempts" >&2
+                return 1
+              fi
+              echo "Waiting for Apple's $architecture notarization ticket ($attempt/90)"
+              sleep 10
+            done
           done
         }
         key="$RUNNER_TEMP/AuthKey.p8"
@@ -283,7 +290,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       actions: read
-    timeout-minutes: 20
+    timeout-minutes: 75
     steps:
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
@@ -297,17 +304,24 @@ jobs:
 
         set -euo pipefail
         verify_notarization() {
-          local attempt
-          for ((attempt = 1; attempt <= 30; attempt++)); do
-            if codesign --verify --strict --check-notarization -R=notarized "$1"; then
-              return 0
-            fi
-            if ((attempt == 30)); then
-              echo "Notarization ticket remained unverifiable after 30 attempts" >&2
-              return 1
-            fi
-            echo "Waiting for Apple's notarization ticket ($attempt/30)"
-            sleep 10
+          local attempt architecture archs
+          local -a architectures=()
+          archs=$(lipo -archs "$1") || return 1
+          read -r -a architectures <<< "$archs"
+          (( ${#architectures[@]} > 0 )) || return 1
+          for architecture in "${architectures[@]}"; do
+            case "$architecture" in arm64|x86_64) ;; *) return 1 ;; esac
+            for ((attempt = 1; attempt <= 90; attempt++)); do
+              if codesign --verify --strict --check-notarization -R=notarized --architecture "$architecture" "$1"; then
+                break
+              fi
+              if ((attempt == 90)); then
+                echo "Notarization ticket for $architecture remained unverifiable after 90 attempts" >&2
+                return 1
+              fi
+              echo "Waiting for Apple's $architecture notarization ticket ($attempt/90)"
+              sleep 10
+            done
           done
         }
         python3 - <<'VERIFY'
