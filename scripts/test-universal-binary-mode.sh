@@ -59,37 +59,36 @@ done
 
 failed=0
 for narrow_tool in strip codesign; do
-    for signing_mode in adhoc; do
-        case_dir="$fixture_root/$narrow_tool-$signing_mode"
-        binary="$case_dir/output directory/axorc"
-        mkdir -p "$case_dir"
-        args=("$binary")
-        if ! output="$(
-            umask 077
-            env -i \
-                PATH="$mock_bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-                AXORCIST_TEST_BUILD_DIR="$fixture_root/build output" \
-                AXORCIST_TEST_STATE="$case_dir" \
-                AXORCIST_TEST_NARROW_TOOL="$narrow_tool" \
-                bash "$builder" "${args[@]}" 2>&1
-        )"; then
-            printf 'FAIL: %s/%s builder failed\n%s\n' "$narrow_tool" "$signing_mode" "$output" >&2
-            failed=1
-            continue
-        fi
-        if [[ ! -f "$case_dir/narrowed" ]]; then
-            printf 'FAIL: %s/%s did not exercise the rewrite\n' "$narrow_tool" "$signing_mode" >&2
-            failed=1
-            continue
-        fi
-        mode="$(python3 -c 'import os, stat, sys; print(format(stat.S_IMODE(os.stat(sys.argv[1]).st_mode), "o"))' "$binary")"
-        if [[ "$mode" != 755 ]]; then
-            printf 'FAIL: %s/%s builder succeeded but output mode is %s; expected 755\n' \
-                "$narrow_tool" "$signing_mode" "$mode" >&2
-            failed=1
-            continue
-        fi
-        printf 'PASS: %s/%s output mode 755 with umask 077\n' "$narrow_tool" "$signing_mode"
-    done
+    signing_mode=adhoc
+    case_dir="$fixture_root/$narrow_tool-$signing_mode"
+    binary="$case_dir/output directory/axorc"
+    mkdir -p "$case_dir"
+    args=("$binary")
+    if ! output="$(
+        umask 077
+        env -i \
+            PATH="$mock_bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+            AXORCIST_TEST_BUILD_DIR="$fixture_root/build output" \
+            AXORCIST_TEST_STATE="$case_dir" \
+            AXORCIST_TEST_NARROW_TOOL="$narrow_tool" \
+            bash "$builder" "${args[@]}" 2>&1
+    )"; then
+        printf 'FAIL: %s/%s builder failed\n%s\n' "$narrow_tool" "$signing_mode" "$output" >&2
+        failed=1
+        continue
+    fi
+    if [[ ! -f "$case_dir/narrowed" ]]; then
+        printf 'FAIL: %s/%s did not exercise the rewrite\n' "$narrow_tool" "$signing_mode" >&2
+        failed=1
+        continue
+    fi
+    mode="$(python3 -c 'import os, stat, sys; print(format(stat.S_IMODE(os.stat(sys.argv[1]).st_mode), "o"))' "$binary")"
+    if [[ "$mode" != 755 ]]; then
+        printf 'FAIL: %s/%s builder succeeded but output mode is %s; expected 755\n' \
+            "$narrow_tool" "$signing_mode" "$mode" >&2
+        failed=1
+        continue
+    fi
+    printf 'PASS: %s/%s output mode 755 with umask 077\n' "$narrow_tool" "$signing_mode"
 done
 exit "$failed"
