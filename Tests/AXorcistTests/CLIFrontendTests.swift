@@ -5,6 +5,12 @@ import Testing
 
 @Suite("axorc user-facing CLI", .tags(.safe))
 struct CLIFrontendTests {
+    @Test(arguments: [(15, "Accessibility"), (26, "Accessibility"), (27, "Device Control and Data Access")])
+    func `Permissions guidance names the OS Settings row`(majorVersion: Int, row: String) {
+        #expect(CLIFrontend.accessibilitySettingsPath(majorVersion: majorVersion) ==
+            "System Settings > Privacy & Security > \(row)")
+    }
+
     @Test
     func `Help and version are discoverable`() throws {
         let help = try runAXORCCommand(arguments: ["--help", "--not-a-real-flag"])

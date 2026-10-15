@@ -4,6 +4,9 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Name macOS 27's renamed "Device Control and Data Access" Settings row in `axorc permissions` guidance (macOS 15/26 keep "Accessibility").
+
 ## [0.2.2] - 2026-10-10
 
 **Highlights:** Stop idle global observers from burning CPU whenever other applications launch or quit, honor request timeouts in `collectAll`, subscribe to every requested notification, and report fast observer-removal failures without retrying in-call.

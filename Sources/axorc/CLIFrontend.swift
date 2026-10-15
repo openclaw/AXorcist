@@ -137,10 +137,18 @@ enum CLIFrontend {
         } else {
             Swift.print("Accessibility: \(trusted ? "granted" : "missing")")
             if !trusted {
-                Swift.print("Grant access in System Settings > Privacy & Security > Accessibility.")
+                Swift.print("Grant access in \(self.accessibilitySettingsPath()).")
             }
         }
         return trusted ? 0 : 1
+    }
+
+    /// macOS 27 renamed the Accessibility row inside Privacy & Security to "Device Control and Data Access".
+    static func accessibilitySettingsPath(
+        majorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion) -> String
+    {
+        let row = majorVersion >= 27 ? "Device Control and Data Access" : "Accessibility"
+        return "System Settings > Privacy & Security > \(row)"
     }
 
     @MainActor
