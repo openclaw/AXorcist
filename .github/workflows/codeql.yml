@@ -51,6 +51,12 @@ jobs:
         with:
           xcode-version: "27.0"
 
+      - name: Ensure Rosetta for CodeQL tracing tools
+        if: matrix.language == 'swift'
+        run: |
+          arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /usr/bin/true
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
