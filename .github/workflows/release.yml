@@ -14,6 +14,8 @@ name: Release
         type: boolean
         default: true
 permissions: {}
+env:
+  MACOSX_DEPLOYMENT_TARGET: '14.0'
 concurrency:
   group: release-${{ github.repository }}-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
@@ -79,7 +81,7 @@ jobs:
     needs:
     - resolve
     - source-proof
-    runs-on: macos-15
+    runs-on: xcode-27
     permissions:
       contents: read
     timeout-minutes: 30
@@ -92,7 +94,7 @@ jobs:
         ref: ${{ github.sha }}
     - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
       with:
-        xcode-version: '26.3'
+        xcode-version: '27.0'
     - name: Build frozen universal executable and notes
       env:
         RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
@@ -109,7 +111,10 @@ jobs:
         install -m 755 "$bin_dir/axorc" raw/axorc
         strip -x raw/axorc
         chmod 755 raw/axorc
-        for arch in arm64 x86_64; do lipo raw/axorc -verify_arch "$arch"; done
+        for arch in arm64 x86_64; do
+          lipo raw/axorc -verify_arch "$arch"
+          xcrun vtool -arch "$arch" -show-build raw/axorc | awk '$1 == "minos" { found=1; if ($2 != "14.0") exit 1 } END { if (!found) exit 1 }'
+        done
         raw/axorc --version | grep -Fx "axorc $RELEASE_VERSION"
         raw/axorc --help >/dev/null
         cp "$RUNNER_TEMP/RELEASE-NOTES.md" raw/
@@ -124,7 +129,7 @@ jobs:
     needs:
     - resolve
     - build
-    runs-on: macos-15
+    runs-on: xcode-27
     permissions:
       actions: read
     timeout-minutes: 180
@@ -283,9 +288,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - runner: macos-15
+        - runner: xcode-27
           arch: arm64
-        - runner: macos-15-intel
+        - runner: xcode-27
           arch: x86_64
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -297,9 +302,15 @@ jobs:
         artifact-ids: ${{ needs.sign.outputs.artifact-id }}
         path: payload
         merge-multiple: true
-    - name: Verify bytes, signatures, tickets and native smoke
+    - name: Ensure Rosetta for Intel verification
+      if: matrix.arch == 'x86_64'
+      run: |
+        arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
+        arch -x86_64 /usr/bin/true
+    - name: Verify bytes, signatures, tickets and architecture smoke
       env:
         RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        VERIFY_ARCH: ${{ matrix.arch }}
       run: |2
 
         set -euo pipefail
@@ -360,9 +371,10 @@ jobs:
           else
             [[ "$(lipo -archs "$cli")" == "$arch" ]]
           fi
-          if [[ "$arch" == universal || "$arch" == "$(uname -m)" ]]; then
-            "$cli" --version | grep -Fx "axorc $RELEASE_VERSION"
-            "$cli" --help >/dev/null
+          if [[ "$arch" == universal || "$arch" == "$VERIFY_ARCH" ]]; then
+            xcrun vtool -arch "$VERIFY_ARCH" -show-build "$cli" | awk '$1 == "minos" { found=1; if ($2 != "14.0") exit 1 } END { if (!found) exit 1 }'
+            arch "-$VERIFY_ARCH" "$cli" --version | grep -Fx "axorc $RELEASE_VERSION"
+            arch "-$VERIFY_ARCH" "$cli" --help >/dev/null
           fi
         done
         mkdir attestation

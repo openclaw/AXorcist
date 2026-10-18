@@ -142,7 +142,7 @@ test('ZIP handoff uses the supported template contract, not tar-only explicit as
 
 test('ticket verification waits for propagation but never accepts a missing ticket', () => {
   const sign = workflow.jobs.sign.steps.find(step => step.name === 'Sign, notarize and freeze all three archives').run;
-  const verify = workflow.jobs.verify.steps.find(step => step.run).run;
+  const verify = workflow.jobs.verify.steps.find(step => step.name === 'Verify bytes, signatures, tickets and architecture smoke').run;
   const extract = script => script.match(/verify_notarization\(\) \{[\s\S]*?\n\}/)?.[0];
   const fn = extract(sign);
   assert.ok(fn);

@@ -4,6 +4,9 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Move all macOS CI and release jobs to Xcode 27 runners, verify Intel binaries under Rosetta, and keep the macOS 14.0 deployment target explicit.
+
 ### Fixed
 - Name macOS 27's renamed "Device Control and Data Access" Settings row in `axorc permissions` guidance (macOS 15/26 keep "Accessibility").
 

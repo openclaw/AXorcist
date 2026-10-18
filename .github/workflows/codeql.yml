@@ -16,6 +16,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -30,7 +33,7 @@ jobs:
       matrix:
         include:
           - language: swift
-            runner: macos-15
+            runner: xcode-27
             build-mode: manual
           - language: python
             runner: ubuntu-24.04
@@ -46,7 +49,7 @@ jobs:
         if: matrix.language == 'swift'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: "16.4"
+          xcode-version: "27.0"
 
       - name: Install Swift toolchain
         if: matrix.language == 'swift'

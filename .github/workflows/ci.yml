@@ -20,6 +20,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+
 jobs:
   build-and-lint:
     name: Swift ${{ matrix.swift }}
@@ -30,8 +33,8 @@ jobs:
       matrix:
         include:
           - swift: "6.2.4"
-            xcode: "16.4"
-            runner: macos-15
+            xcode: "27.0"
+            runner: xcode-27
             validate: true
           - swift: "6.4.0"
             xcode: "27.0"
@@ -80,6 +83,8 @@ jobs:
       if: matrix.validate
       shell: bash
       run: |
+        arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
+        arch -x86_64 /usr/bin/true
         shellcheck scripts/*.sh
         version="$(sed -n 's/.*axorcVersion = "\([^"]*\)".*/\1/p' Sources/axorc/Models/AXORCModels.swift)"
         umask 077
@@ -103,10 +108,13 @@ jobs:
             test "$(lipo -archs "$binary")" = "$architecture"
             test "$(stat -f '%z' "$archive")" -lt "$(stat -f '%z' "dist/axorc-$version-macos-universal.zip")"
           fi
-          if [[ "$architecture" == universal || "$architecture" == "$(uname -m)" ]]; then
-            "$binary" --version | grep -Fx "axorc $version"
-            "$binary" --help >/dev/null
-          fi
+          for target_arch in arm64 x86_64; do
+            if [[ "$architecture" == universal || "$architecture" == "$target_arch" ]]; then
+              xcrun vtool -arch "$target_arch" -show-build "$binary" | awk '$1 == "minos" { found=1; if ($2 != "14.0") exit 1 } END { if (!found) exit 1 }'
+              arch "-$target_arch" "$binary" --version | grep -Fx "axorc $version"
+              arch "-$target_arch" "$binary" --help >/dev/null
+            fi
+          done
         done
         scripts/render-homebrew-formula.sh "$version" --artifacts dist > /tmp/axorc.rb
         grep -Fq 'skip_clean "bin/axorc"' /tmp/axorc.rb
