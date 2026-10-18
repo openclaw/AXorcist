@@ -25,21 +25,9 @@ env:
 
 jobs:
   build-and-lint:
-    name: Swift ${{ matrix.swift }}
-    runs-on: ${{ matrix.runner }}
+    name: Swift 6.4
+    runs-on: xcode-27
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - swift: "6.2.4"
-            xcode: "27.0"
-            runner: xcode-27
-            validate: true
-          - swift: "6.4.0"
-            xcode: "27.0"
-            runner: xcode-27
-            validate: false
 
     steps:
     - name: Checkout code
@@ -48,20 +36,12 @@ jobs:
     - name: Select Xcode
       uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
       with:
-        xcode-version: ${{ matrix.xcode }}
-    
-    - name: Install Swift toolchain
-      if: matrix.validate
-      uses: SwiftyLab/setup-swift@9014d4136569075c696d4151c7810ecde8712907 # v1.14.1
-      with:
-        swift-version: ${{ matrix.swift }}
+        xcode-version: "27.0"
 
-    - name: Verify bundled latest Swift toolchain
-      if: ${{ !matrix.validate }}
+    - name: Verify bundled Swift toolchain
       run: swift --version | grep -E 'Swift version 6\.4([. ]|$)'
     
     - name: Install validation tools
-      if: matrix.validate
       run: |
         brew install shellcheck
         validation_tools_dir="${{ runner.temp }}/axorcist-validation-tools"
@@ -69,18 +49,15 @@ jobs:
         echo "$validation_tools_dir" >> "$GITHUB_PATH"
     
     - name: Verify release workflow boundaries
-      if: matrix.validate
       run: node --test .github/scripts/test-release-workflow.mjs
 
     - name: Run safe tests
       run: swift test
     
     - name: Run formatting and linting checks
-      if: matrix.validate
       run: make check
 
     - name: Verify CLI release packaging
-      if: matrix.validate
       shell: bash
       run: |
         arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
@@ -121,7 +98,6 @@ jobs:
         ruby -c /tmp/axorc.rb
 
     - name: Retain ad-hoc packaging artifacts
-      if: matrix.validate
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: axorc-adhoc-${{ github.sha }}

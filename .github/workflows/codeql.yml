@@ -51,12 +51,6 @@ jobs:
         with:
           xcode-version: "27.0"
 
-      - name: Install Swift toolchain
-        if: matrix.language == 'swift'
-        uses: SwiftyLab/setup-swift@9014d4136569075c696d4151c7810ecde8712907 # v1.14.1
-        with:
-          swift-version: "6.2.4"
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
