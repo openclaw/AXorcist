@@ -51,12 +51,6 @@ jobs:
         with:
           xcode-version: "27.0"
 
-      - name: Ensure Rosetta for CodeQL tracing tools
-        if: matrix.language == 'swift'
-        run: |
-          arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
-          arch -x86_64 /usr/bin/true
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
@@ -65,7 +59,8 @@ jobs:
 
       - name: Build Swift library and CLI
         if: matrix.language == 'swift'
-        run: swift build
+        # CodeQL's tracer cannot spawn macOS 27's arm64e-only sandbox-exec.
+        run: swift build --disable-sandbox
 
       - name: Analyze
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
