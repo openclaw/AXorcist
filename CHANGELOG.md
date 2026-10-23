@@ -4,13 +4,17 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
-### Changed
-- Update swift-log to 1.16.2, SwiftFormat to 0.64.1, CodeQL Action to 4.39.1, and artifact Actions to 7.0.2/8.0.2 while retaining the existing declaration and control-flow formatting style.
-- Move all macOS CI and release jobs to Xcode 27 runners with their SDK-compatible Swift toolchain, verify Intel binaries under Rosetta, and keep the macOS 14.0 deployment target explicit.
+## [0.2.3] - 2026-10-23
+
+**Highlights:** Honor observation options and preserve distinct notification details while keeping debug callbacks responsive; show the correct macOS 27 permission guidance.
 
 ### Fixed
 - Honor `watch_children` and `include_element_details` in observe requests, retain full distinct attribute payloads in notification logs, keep debug CLI callbacks responsive, and roll back only the failed request's subscriptions. Thanks @SebTardif.
 - Name macOS 27's renamed "Device Control and Data Access" Settings row in `axorc permissions` guidance (macOS 15/26 keep "Accessibility").
+
+### Changed
+- Update swift-log to 1.16.2, SwiftFormat to 0.64.1, CodeQL Action to 4.39.1, and artifact Actions to 7.0.2/8.0.2 while retaining the existing declaration and control-flow formatting style.
+- Move all macOS CI and release jobs to Xcode 27 runners with their SDK-compatible Swift toolchain, verify Intel binaries under Rosetta, and keep the macOS 14.0 deployment target explicit.
 
 ## [0.2.2] - 2026-10-10
 
