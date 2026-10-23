@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-swiftformat_version="0.63.1"
-swiftformat_sha256="385ef1a263ba28685157b98c5536b9c9105e124518f28b7ef8a2bee4b167eaeb"
+swiftformat_version="0.64.1"
+swiftformat_sha256="0e5762a848d738602c7a983b26812031e634d85e357db070968b9c805f253eff"
 swiftlint_version="0.65.1"
 swiftlint_sha256="c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0"
 

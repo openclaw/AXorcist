@@ -42,6 +42,9 @@
 # Swift 6 specific
 --swiftversion 6.2
 
+# Preserve the existing declaration and control-flow style with SwiftFormat 0.64.
+--disable extensionAttributes,repeatedGuard,nestedIf
+
 # Other
 --stripunusedargs closure-only
 --header ignore

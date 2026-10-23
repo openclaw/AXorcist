@@ -5,6 +5,7 @@ All notable changes to AXorcist will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- Update swift-log to 1.16.2, SwiftFormat to 0.64.1, CodeQL Action to 4.39.1, and artifact Actions to 7.0.2/8.0.2 while retaining the existing declaration and control-flow formatting style.
 - Move all macOS CI and release jobs to Xcode 27 runners with their SDK-compatible Swift toolchain, verify Intel binaries under Rosetta, and keep the macOS 14.0 deployment target explicit.
 
 ### Fixed
