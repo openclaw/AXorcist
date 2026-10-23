@@ -5,6 +5,20 @@ private struct ObserveNotificationError: Error {
     let message: String
 }
 
+@MainActor
+private func observationDetailValues(
+    element: Element,
+    names: [String],
+    readAttribute: (Element, String) -> CFTypeRef?) -> [String: String]
+{
+    var values: [String: String] = [:]
+    for name in names {
+        let value = readAttribute(element, name)
+        values[name] = value.map { String(describing: $0) } ?? "nil"
+    }
+    return values
+}
+
 /// Extension providing accessibility notification observation handlers for AXorcist.
 ///
 /// This extension handles:
@@ -22,6 +36,17 @@ extension AXorcist {
     public func handleObserve(
         command: ObserveCommand,
         traversalOptions: AXTraversalOptions) -> AXResponse
+    {
+        self.handleObserve(
+            command: command,
+            traversalOptions: traversalOptions,
+            now: { ProcessInfo.processInfo.systemUptime })
+    }
+
+    func handleObserve(
+        command: ObserveCommand,
+        traversalOptions: AXTraversalOptions,
+        now: @escaping AXTraversalClock) -> AXResponse
     {
         let notifications: [AXNotification]
         switch self.validatedNotifications(command.notifications) {
@@ -55,9 +80,14 @@ extension AXorcist {
 
         self.logObservationTarget(elementToObserve)
 
-        let callback = self.makeObservationCallback()
+        let callback = self.makeObservationCallback(details: command.includeElementDetails)
+        let elements = self.elementsToObserve(
+            root: elementToObserve,
+            command: command,
+            timeout: traversalOptions.timeout,
+            now: now)
         return self.startObservation(
-            element: elementToObserve,
+            elements: elements,
             notifications: notifications,
             callback: callback)
     }
@@ -96,47 +126,101 @@ extension AXorcist {
         GlobalAXLogger.shared.log(AXLogEntry(level: .debug, message: message))
     }
 
+    private func elementsToObserve(
+        root: Element,
+        command: ObserveCommand,
+        timeout: TimeInterval,
+        now: @escaping AXTraversalClock) -> [Element]
+    {
+        guard command.watchChildren else { return [root] }
+        var ordered = [root]
+        traverseAXTree(
+            from: root,
+            maxDepth: max(command.maxDepthForSearch, 0),
+            strictChildren: true,
+            timeout: timeout,
+            now: now,
+            children: { element, _ in self.observationChildren(of: element) },
+            onTimeout: {
+                GlobalAXLogger.shared.log(AXLogEntry(
+                    level: .warning,
+                    message: "HandleObserve: traversal timeout (\(timeout)s) reached. Stopping child walk."))
+            },
+            visit: { element, depth in
+                if depth > 0 {
+                    ordered.append(element)
+                }
+                return .continue
+            })
+        return ordered
+    }
+
     private func startObservation(
-        element: Element,
+        elements: [Element],
         notifications: [AXNotification],
         callback: @escaping AXNotificationSubscriptionHandler) -> AXResponse
     {
         let names = notifications.map(\.rawValue).joined(separator: ", ")
-        switch self.subscribeToNotifications(
-            element: element,
-            notifications: notifications,
-            handler: callback)
-        {
-        case .success:
-            let successMessage = [
-                "HandleObserve: Successfully started observing '\(names)' on",
-                element.briefDescription(option: ValueFormatOption.smart),
-            ].joined(separator: " ")
-            GlobalAXLogger.shared.log(AXLogEntry(level: .info, message: successMessage))
-            return .successResponse(payload: AnyCodable(["message": successMessage]))
-        case let .failure(error):
-            let details = [
-                "HandleObserve: Failed to add observer.",
-                "Error: \(error.localizedDescription) (Code: \(error))",
-                "Pid: \(element.pid()?.description ?? "N/A")",
-                "Notifications: \(names)",
-            ].joined(separator: " ")
-            GlobalAXLogger.shared.log(AXLogEntry(level: .error, message: details))
-            return .errorResponse(message: details, code: .observationFailed)
+        var subscribed: [SubscriptionToken] = []
+        for element in elements {
+            for notification in notifications {
+                switch self.subscribeToObservation(
+                    pid: element.pid(),
+                    element: element,
+                    notification: notification,
+                    handler: callback)
+                {
+                case let .success(token):
+                    subscribed.append(token)
+                case let .failure(error):
+                    self.rollbackObservationSubscriptions(subscribed)
+                    let details = [
+                        "HandleObserve: Failed to add observer.",
+                        "Error: \(error.localizedDescription) (Code: \(error))",
+                        "Pid: \(element.pid()?.description ?? "N/A")",
+                        "Notifications: \(names)",
+                    ].joined(separator: " ")
+                    GlobalAXLogger.shared.log(AXLogEntry(level: .error, message: details))
+                    return .errorResponse(message: details, code: .observationFailed)
+                }
+            }
         }
+        guard let target = elements.first else {
+            return .errorResponse(
+                message: "HandleObserve: no element to observe.",
+                code: .observationFailed)
+        }
+        let successMessage = [
+            "HandleObserve: Successfully started observing '\(names)' on",
+            "\(elements.count) element(s) from",
+            target.briefDescription(option: ValueFormatOption.smart),
+        ].joined(separator: " ")
+        GlobalAXLogger.shared.log(AXLogEntry(level: .info, message: successMessage))
+        return .successResponse(payload: AnyCodable(["message": successMessage]))
     }
 
-    private func makeObservationCallback() -> AXNotificationSubscriptionHandler {
-        { _, notification, axUIElement, userInfo in
+    func makeObservationCallback(
+        details: [String]?,
+        logger: GlobalAXLogger = .shared,
+        readAttribute: @escaping @MainActor (Element, String) -> CFTypeRef? = { $0.rawAttributeValue(named: $1) })
+        -> AXNotificationSubscriptionHandler
+    {
+        let names = details ?? []
+        return { _, notification, axUIElement, userInfo in
             let element = Element(axUIElement)
             let userInfoDesc = userInfo.map(String.init(describing:)) ?? "nil"
-            let message = [
+            let parts = [
                 "AXObserver CALLBACK:",
                 "Element: \(element.briefDescription(option: ValueFormatOption.smart))",
                 "Notification: \(notification.rawValue)",
                 "UserInfo: \(userInfoDesc)",
-            ].joined(separator: " ")
-            GlobalAXLogger.shared.log(AXLogEntry(level: .info, message: message))
+            ]
+            let values = observationDetailValues(element: element, names: names, readAttribute: readAttribute)
+            let details = values.isEmpty ? nil : values.mapValues { AnyCodable($0) }
+            logger.log(AXLogEntry(
+                level: .info,
+                message: parts.joined(separator: " "),
+                details: details))
         }
     }
 }

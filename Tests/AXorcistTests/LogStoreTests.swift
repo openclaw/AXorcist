@@ -33,6 +33,71 @@ struct LogStoreTests {
     }
 
     @Test
+    func `details past the truncated message stay distinct`() {
+        let logger = self.makeLogger()
+        let sharedPrefix = String(repeating: "a", count: 400)
+        let firstValue = sharedPrefix + "ONE"
+        let secondValue = sharedPrefix + "TWO"
+        logger.log(AXLogEntry(
+            level: .info,
+            message: "callback",
+            details: [
+                "AXValue": AnyCodable(firstValue),
+                "AXRole": AnyCodable("AXTextField"),
+            ]))
+        logger.log(AXLogEntry(
+            level: .info,
+            message: "callback",
+            details: [
+                "AXValue": AnyCodable(secondValue),
+                "AXRole": AnyCodable("AXTextField"),
+            ]))
+        let entries = logger.getEntries()
+        #expect(entries.count == 2)
+        #expect(entries[0].details?["AXValue"]?.value as? String == firstValue)
+        #expect(entries[0].details?["AXRole"]?.value as? String == "AXTextField")
+        #expect(entries[1].details?["AXValue"]?.value as? String == secondValue)
+        #expect(entries[1].details?["AXRole"]?.value as? String == "AXTextField")
+    }
+
+    @Test
+    func `detail separators cannot hide a changed payload`() {
+        let logger = self.makeLogger()
+        logger.log(AXLogEntry(level: .info, message: "callback", details: [
+            "AXTitle": AnyCodable("title\nAXValue=value"),
+        ]))
+        logger.log(AXLogEntry(level: .info, message: "callback", details: [
+            "AXTitle": AnyCodable("title"),
+            "AXValue": AnyCodable("value"),
+        ]))
+        #expect(logger.getEntries().count == 2)
+    }
+
+    @Test
+    func `detail types remain distinct while dictionary order does not`() {
+        let logger = self.makeLogger()
+        logger.log(AXLogEntry(level: .info, message: "callback", details: [
+            "value": AnyCodable(42), "role": AnyCodable("field"),
+        ]))
+        logger.log(AXLogEntry(level: .info, message: "callback", details: [
+            "value": AnyCodable("42"), "role": AnyCodable("field"),
+        ]))
+        logger.log(AXLogEntry(level: .info, message: "callback", details: [
+            "role": AnyCodable("field"), "value": AnyCodable("42"),
+        ]))
+        #expect(logger.getEntries().count == 2)
+    }
+
+    @Test
+    func `unencodable details are never treated as duplicates`() {
+        let logger = self.makeLogger()
+        for value in [Double.nan, Double.infinity] {
+            logger.log(AXLogEntry(level: .info, message: "callback", details: ["value": AnyCodable(value)]))
+        }
+        #expect(logger.getEntries().count == 2)
+    }
+
+    @Test
     func `condensation preserves identity and timestamp`() throws {
         let store = self.makeLogger()
         let entry = AXLogEntry(level: .info, message: String(repeating: "x", count: 500))

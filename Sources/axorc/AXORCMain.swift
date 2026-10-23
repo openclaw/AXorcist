@@ -87,7 +87,7 @@ struct AXORCCommand: ParsableCommand {
         command: CommandEnvelope,
         axorcist: AXorcist,
         debugCLI: Bool,
-        traversalOptions: AXTraversalOptions) throws
+        traversalOptions: AXTraversalOptions) async throws
     {
         if debugCLI {
             axDebugLog("Successfully parsed command: \(command.command) (ID: \(command.commandId))")
@@ -106,22 +106,20 @@ struct AXORCCommand: ParsableCommand {
         }
 
         if command.command == .observe {
-            self.handleSuccessfulObserveCommand(owner: axorcist)
+            try await self.handleSuccessfulObserveCommand(owner: axorcist)
         }
     }
 
     @MainActor
-    private func handleSuccessfulObserveCommand(owner: AXorcist) {
+    private func handleSuccessfulObserveCommand(owner: AXorcist) async throws {
         axInfoLog(
             logSegments(
                 "AXORCMain: Observer setup successful",
-                "Process will remain alive by running current RunLoop"))
+                "Process will remain alive while awaiting notifications"))
+        #if DEBUG
+        try await waitForObservation(owner: owner)
+        #else
         withExtendedLifetime(owner) {
-            #if DEBUG
-            axInfoLog("AXORCMain: DEBUG mode - entering RunLoop.current.run() for observer.")
-            RunLoop.current.run()
-            axInfoLog("AXORCMain: DEBUG mode - RunLoop.current.run() finished.")
-            #else
             let errorPayload = [
                 "{\"error\": \"The 'observe' command is intended for DEBUG builds or specific use cases.",
                 " In release, it sets up the observer but will not keep the process alive indefinitely by itself.",
@@ -129,18 +127,16 @@ struct AXORCCommand: ParsableCommand {
             ].joined()
             fputs(errorPayload, stderr)
             fflush(stderr)
-            #endif
         }
+        #endif
     }
 
     mutating func run() async throws {
-        try await MainActor.run {
-            try self.runMain()
-        }
+        try await self.runMain()
     }
 
     @MainActor
-    private mutating func runMain() throws {
+    private mutating func runMain() async throws {
         self.configureLogging()
         defer { GlobalAXLogger.shared.clearEntries() }
         let traversalOptions = self.resolvedTraversalOptions()
@@ -166,7 +162,7 @@ struct AXORCCommand: ParsableCommand {
 
         self.logDebug("Received JSON input (\(jsonStringFromInput.count) characters).")
 
-        try self.decodeAndExecute(
+        try await self.decodeAndExecute(
             jsonString: jsonStringFromInput,
             axorcist: axorcistInstance,
             traversalOptions: traversalOptions)
@@ -230,7 +226,7 @@ struct AXORCCommand: ParsableCommand {
     private mutating func decodeAndExecute(
         jsonString: String,
         axorcist: AXorcist,
-        traversalOptions: AXTraversalOptions) throws
+        traversalOptions: AXTraversalOptions) async throws
     {
         guard let data = jsonString.data(using: .utf8) else {
             axDebugLog("AXORCMain Test: Failed to convert jsonStringFromInput to data.")
@@ -271,7 +267,7 @@ struct AXORCCommand: ParsableCommand {
         }
 
         self.suppressFinalLogDump = command.command == .observe
-        try self.processAndExecuteCommand(
+        try await self.processAndExecuteCommand(
             command: command,
             axorcist: axorcist,
             debugCLI: self.debug,

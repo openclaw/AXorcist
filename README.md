@@ -535,6 +535,8 @@ Monitor UI changes with these notifications:
 Observe and `stopObservation` commands executed by the same `AXorcist` instance share one subscription registry, so a
 successful stop clears the observations that instance started.
 
+`watch_children` also subscribes to the target's descendants present during setup, down to `max_depth` (zero keeps only the target). The traversal timeout bounds discovery and retains the elements already found; it does not interrupt an in-flight Accessibility call. Children created after setup require a new observe request. Requested `include_element_details` attributes are read from the element that sent each notification and retained in full in the log entry's `details`, including in text and JSON log output.
+
 An observe request subscribes to every name in `notifications`. Empty lists and invalid names are rejected before
 resolving the target. If a later registration fails, the request removes its earlier subscriptions while preserving
 preexisting observers. For Swift callers, `notifications` defines the complete list; `notificationName` remains a

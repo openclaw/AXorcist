@@ -63,6 +63,13 @@ public class GlobalAXLogger {
     private struct Key: Equatable {
         let message: String
         let level: AXLogLevel
+        let details: DetailKey
+    }
+
+    private enum DetailKey: Equatable {
+        case none
+        case encoded(Data)
+        case unencodable(UUID)
     }
 
     private var rawEntries: [AXLogEntry] = []
@@ -78,7 +85,10 @@ public class GlobalAXLogger {
         let message = messageLength > 300
             ? "\(entry.message.prefix(300))… (\(messageLength) chars)"
             : entry.message
-        let key = Key(message: message, level: entry.level)
+        let key = Key(
+            message: message,
+            level: entry.level,
+            details: self.detailsKey(entry.details))
         if self.lastKey == key {
             self.lastEntry = entry
             self.duplicateCount += 1
@@ -103,6 +113,17 @@ public class GlobalAXLogger {
             function: entry.function,
             line: entry.line,
             details: entry.details))
+    }
+
+    private func detailsKey(_ details: [String: AnyCodable]?) -> DetailKey {
+        guard let details else { return .none }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let encoded = try? encoder.encode(details) else {
+            // Failed encoding must not turn different payloads into duplicates.
+            return .unencodable(UUID())
+        }
+        return .encoded(encoded)
     }
 
     private func shouldLog(_ level: AXLogLevel) -> Bool {

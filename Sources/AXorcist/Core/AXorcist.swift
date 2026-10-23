@@ -33,18 +33,23 @@ public class AXorcist {
 
     // MARK: Lifecycle
 
+    typealias ObservationChildProvider = @MainActor (Element) -> [Element]
+
     /// Creates a new AXorcist instance.
     @MainActor public init() {
         self.observationRegistry = AXObserverCenter.shared
         self.observationTargetResolver = nil
+        self.observationChildProvider = nil
     }
 
     init(
         observationRegistry: any AXObservationRegistry,
-        observationTargetResolver: @escaping ObservationTargetResolver)
+        observationTargetResolver: @escaping ObservationTargetResolver,
+        observationChildProvider: ObservationChildProvider? = nil)
     {
         self.observationRegistry = observationRegistry
         self.observationTargetResolver = observationTargetResolver
+        self.observationChildProvider = observationChildProvider
     }
 
     deinit {
@@ -188,11 +193,19 @@ public class AXorcist {
         ]))
     }
 
+    func observationChildren(of element: Element) -> [Element] {
+        if let observationChildProvider = self.observationChildProvider {
+            return observationChildProvider(element)
+        }
+        return element.children(strict: true) ?? []
+    }
+
     // MARK: Private
 
     private let logger = GlobalAXLogger.shared // Use the shared logger
     private let observationRegistry: any AXObservationRegistry
     private let observationTargetResolver: ObservationTargetResolver?
+    private let observationChildProvider: ObservationChildProvider?
     private var observationTokens: Set<SubscriptionToken> = []
 
     private func collectElementData(
@@ -309,7 +322,7 @@ public class AXorcist {
         return .success(())
     }
 
-    private func rollbackObservationSubscriptions(_ tokens: [SubscriptionToken]) {
+    func rollbackObservationSubscriptions(_ tokens: [SubscriptionToken]) {
         for token in tokens {
             self.observationTokens.remove(token)
             do {

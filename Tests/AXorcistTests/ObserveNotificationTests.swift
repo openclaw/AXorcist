@@ -144,11 +144,158 @@ struct ObserveNotificationTests {
         #expect(cleaned == [.titleChanged, .valueChanged])
     }
 
-    private func command(notifications: [String]) -> ObserveCommand {
+    @Test
+    func `observe subscribes direct children when watch children is set`() {
+        let registry = NotificationListRegistry()
+        let target = Element(AXUIElementCreateApplication(getpid()))
+        let child = Element(AXUIElementCreateApplication(pid_t(1)))
+        let axorcist = AXorcist(
+            observationRegistry: registry,
+            observationTargetResolver: { _, _, _ in (target, nil) },
+            observationChildProvider: { element in
+                CFEqual(element.underlyingElement, target.underlyingElement) ? [child] : []
+            })
+
+        let response = axorcist.handleObserve(command: self.command(
+            notifications: [AXNotification.valueChanged.rawValue],
+            watchChildren: true,
+            maxDepthForSearch: 1))
+
+        #expect(response.status == "success")
+        #expect(registry.notifications == [.valueChanged, .valueChanged])
+        #expect(Set(registry.elements) == Set([target, child]))
+        axorcist.stopObserving()
+        #expect(registry.activeCount == 0)
+    }
+
+    @Test
+    func `observe does not walk children unless watch children is set`() {
+        let registry = NotificationListRegistry()
+        let target = Element(AXUIElementCreateApplication(getpid()))
+        let walked = ChildWalkFlag()
+        let axorcist = AXorcist(
+            observationRegistry: registry,
+            observationTargetResolver: { _, _, _ in (target, nil) },
+            observationChildProvider: { _ in
+                walked.called = true
+                return []
+            })
+
+        let response = axorcist.handleObserve(command: self.command(
+            notifications: [AXNotification.valueChanged.rawValue]))
+
+        #expect(response.status == "success")
+        #expect(walked.called == false)
+        #expect(registry.elements.count == 1)
+        axorcist.stopObserving()
+    }
+
+    @Test
+    func `observe depth zero keeps the subscription on the requested element`() {
+        let registry = NotificationListRegistry()
+        let target = Element(AXUIElementCreateApplication(getpid()))
+        let walked = ChildWalkFlag()
+        let axorcist = AXorcist(
+            observationRegistry: registry,
+            observationTargetResolver: { _, _, _ in (target, nil) },
+            observationChildProvider: { _ in
+                walked.called = true
+                return [Element(AXUIElementCreateApplication(pid_t(1)))]
+            })
+
+        let response = axorcist.handleObserve(command: self.command(
+            notifications: [AXNotification.valueChanged.rawValue],
+            watchChildren: true,
+            maxDepthForSearch: 0))
+
+        #expect(response.status == "success")
+        #expect(walked.called == false)
+        #expect(registry.elements.count == 1)
+        axorcist.stopObserving()
+    }
+
+    @Test
+    func `observe stops the child walk at the traversal deadline`() {
+        let registry = NotificationListRegistry()
+        let target = Element(AXUIElementCreateApplication(getpid()))
+        let walked = ChildWalkFlag()
+        let clock = TraversalClock(times: [0, 100])
+        let axorcist = AXorcist(
+            observationRegistry: registry,
+            observationTargetResolver: { _, _, _ in (target, nil) },
+            observationChildProvider: { _ in
+                walked.called = true
+                return [Element(AXUIElementCreateApplication(pid_t(1)))]
+            })
+
+        let response = axorcist.handleObserve(
+            command: self.command(
+                notifications: [AXNotification.valueChanged.rawValue],
+                watchChildren: true,
+                maxDepthForSearch: 5),
+            traversalOptions: AXTraversalOptions(timeout: 1),
+            now: { clock.next() })
+
+        #expect(response.status == "success")
+        #expect(walked.called == false)
+        #expect(registry.elements.count == 1)
+        axorcist.stopObserving()
+    }
+
+    @Test
+    func `observe rolls back the parent when a child subscription fails`() {
+        let registry = NotificationListRegistry(failAfter: 1)
+        let target = Element(AXUIElementCreateApplication(getpid()))
+        let child = Element(AXUIElementCreateApplication(pid_t(1)))
+        let axorcist = AXorcist(
+            observationRegistry: registry,
+            observationTargetResolver: { _, _, _ in (target, nil) },
+            observationChildProvider: { element in
+                CFEqual(element.underlyingElement, target.underlyingElement) ? [child] : []
+            })
+
+        let response = axorcist.handleObserve(command: self.command(
+            notifications: [AXNotification.valueChanged.rawValue],
+            watchChildren: true,
+            maxDepthForSearch: 1))
+
+        #expect(response.status == "error")
+        #expect(response.error?.code == .observationFailed)
+        #expect(registry.activeCount == 0)
+    }
+
+    private func command(
+        notifications: [String],
+        watchChildren: Bool = false,
+        includeElementDetails: [String]? = nil,
+        maxDepthForSearch: Int = 10) -> ObserveCommand
+    {
         ObserveCommand(
             appIdentifier: "fixture",
             notifications: notifications,
-            notificationName: .valueChanged)
+            watchChildren: watchChildren,
+            notificationName: .valueChanged,
+            includeElementDetails: includeElementDetails,
+            maxDepthForSearch: maxDepthForSearch)
+    }
+}
+
+@MainActor
+private final class ChildWalkFlag {
+    var called = false
+}
+
+@MainActor
+private final class TraversalClock {
+    private var times: [TimeInterval]
+
+    init(times: [TimeInterval]) {
+        self.times = times
+    }
+
+    func next() -> TimeInterval {
+        guard !self.times.isEmpty else { return 100 }
+        return self.times.removeFirst()
     }
 }
 
@@ -156,11 +303,14 @@ struct ObserveNotificationTests {
 private final class NotificationListRegistry: AXObservationRegistry {
     private var tokens: [SubscriptionToken: AXNotification] = [:]
     private let failing: Set<AXNotification>
-
+    private let failAfter: Int?
+    private var successCount = 0
     private(set) var notifications: [AXNotification] = []
+    private(set) var elements: [Element] = []
 
-    init(failing: Set<AXNotification> = []) {
+    init(failing: Set<AXNotification> = [], failAfter: Int? = nil) {
         self.failing = failing
+        self.failAfter = failAfter
     }
 
     var activeCount: Int {
@@ -169,7 +319,7 @@ private final class NotificationListRegistry: AXObservationRegistry {
 
     func subscribeProcess(
         pid _: pid_t,
-        element _: Element?,
+        element: Element?,
         notification: AXNotification,
         handler _: @escaping AXNotificationSubscriptionHandler) -> Result<SubscriptionToken, AccessibilityError>
     {
@@ -177,8 +327,15 @@ private final class NotificationListRegistry: AXObservationRegistry {
         guard !self.failing.contains(notification) else {
             return .failure(.observerSetupFailed(details: "Fixture rejected \(notification.rawValue)"))
         }
+        if let failAfter = self.failAfter, self.successCount >= failAfter {
+            return .failure(.observerSetupFailed(details: "Fixture rejected subscription \(self.successCount)"))
+        }
         let token = SubscriptionToken(id: UUID())
         self.tokens[token] = notification
+        if let element {
+            self.elements.append(element)
+        }
+        self.successCount += 1
         return .success(token)
     }
 
