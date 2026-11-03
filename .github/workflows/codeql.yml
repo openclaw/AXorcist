@@ -1,8 +1,6 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -10,8 +8,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
-  cancel-in-progress: true
+  group: "${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

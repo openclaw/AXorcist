@@ -4,6 +4,9 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Run main CodeQL analysis on the existing weekly schedule instead of every push, preserving PR scans and independent manual runs.
+
 ## [0.2.3] - 2026-10-23
 
 **Highlights:** Honor observation options and preserve distinct notification details while keeping debug callbacks responsive; show the correct macOS 27 permission guidance.
