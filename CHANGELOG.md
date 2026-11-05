@@ -4,6 +4,9 @@ All notable changes to AXorcist will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Refuse release publishing when the tag already has a draft or published release, including interrupted uploads and drafts on later listing pages. Existing releases require explicit inspection before retrying.
+
 ### Changed
 - Run main CodeQL analysis on the existing weekly schedule instead of every push, preserving PR scans and independent manual runs.
 
