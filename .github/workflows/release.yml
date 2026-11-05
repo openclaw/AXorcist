@@ -436,6 +436,13 @@ jobs:
           await checkTag();
           try { await github.rest.repos.getReleaseByTag({...context.repo,tag}); throw new Error('Version already released'); } catch(e) { if(e.status!==404) throw e; }
           const notes=fs.readFileSync(`${p}/RELEASE-NOTES.md`,'utf8');
+          // The tag endpoint omits drafts, including interrupted uploads. Never adopt one on retry.
+          for(let page=1;;page++){
+           const releases=(await github.rest.repos.listReleases({...context.repo,per_page:100,page})).data;
+           if(!Array.isArray(releases)||releases.length>100||releases.some(r=>!r||typeof r.tag_name!=='string'||!r.tag_name||typeof r.draft!=='boolean')) throw new Error('Invalid release listing');
+           if(releases.some(r=>r.tag_name===tag)) throw new Error('Release already exists for tag; inspect it before retrying');
+           if(releases.length<100) break;
+          }
           const release=(await github.rest.repos.createRelease({...context.repo,tag_name:tag,target_commitish:context.sha,name:tag,body:notes,draft:true})).data;
           for(const a of assets) await github.rest.repos.uploadReleaseAsset({...context.repo,release_id:release.id,name:a.name,data:fs.readFileSync(path.join(p,a.name))});
           const remote=(await github.rest.repos.listReleaseAssets({...context.repo,release_id:release.id,per_page:100})).data;

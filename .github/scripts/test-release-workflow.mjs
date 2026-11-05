@@ -88,43 +88,166 @@ function publishFixture() {
   }
   return dir;
 }
-async function publish(dir, moved = false) {
-  const writes = [];
+function publisher(dir, releases = []) {
+  const state = { releases, writes: [], pages: [], downloads: [], moved: false, failUploadAt: 0, remoteTampered: false, draftChanged: false };
+  let nextId = 1000;
   const mockFs = {
     readFileSync: (file, ...args) => fs.readFileSync(path.join(dir, file), ...args),
     readdirSync: file => fs.readdirSync(path.join(dir, file)),
   };
   const github = { rest: {
     git: {
-      getRef: async () => ({ data: { object: { type: 'tag', sha: moved ? 'c'.repeat(40) : object } } }),
+      getRef: async () => ({ data: { object: { type: 'tag', sha: state.moved ? 'c'.repeat(40) : object } } }),
       getTag: async () => ({ data: { object: { type: 'commit', sha } } }),
     },
     repos: {
-      getReleaseByTag: async () => { throw Object.assign(new Error('missing'), { status: 404 }); },
-      createRelease: async () => { writes.push('create'); throw new Error('stop at first write'); },
+      getReleaseByTag: async () => {
+        if (state.publishedLookup) return { data: state.publishedLookup };
+        throw Object.assign(new Error('missing'), { status: 404 });
+      },
+      listReleases: async ({ page, per_page }) => {
+        assert.equal(per_page, 100);
+        state.pages.push(page);
+        return { data: state.listPage ? await state.listPage(page) : state.releases.slice((page - 1) * per_page, page * per_page) };
+      },
+      createRelease: async input => {
+        state.writes.push('create');
+        const release = { ...input, id: nextId++, html_url: 'https://example.invalid/release', assets: [] };
+        state.releases.push(release);
+        return { data: release };
+      },
+      uploadReleaseAsset: async ({ release_id, name, data }) => {
+        state.writes.push(`upload:${name}`);
+        const release = state.releases.find(r => r.id === release_id);
+        if (release.assets.length + 1 === state.failUploadAt) throw new Error('Upload interrupted');
+        release.assets.push({ id: nextId++, name, size: data.length, bytes: Buffer.from(data) });
+      },
+      listReleaseAssets: async ({ release_id }) => ({ data: state.releases.find(r => r.id === release_id).assets }),
+      getRelease: async ({ release_id }) => {
+        const release = state.releases.find(r => r.id === release_id);
+        return { data: state.draftChanged ? { ...release, body: 'changed' } : release };
+      },
+      updateRelease: async ({ release_id, draft }) => {
+        state.writes.push('publish');
+        state.releases.find(r => r.id === release_id).draft = draft;
+      },
     },
+  }, request: async (route, { asset_id }) => {
+    assert.equal(route, 'GET /repos/{owner}/{repo}/releases/assets/{asset_id}');
+    const asset = state.releases.flatMap(r => r.assets ?? []).find(a => a.id === asset_id);
+    state.downloads.push(asset.name);
+    return { data: state.remoteTampered ? Buffer.from('tamper') : asset.bytes };
   } };
   const script = workflow.jobs.publish.steps.at(-1).with.script;
   const modules = { fs: mockFs, path, crypto: { createHash } };
-  await new AsyncFunction('github', 'context', 'core', 'process', 'require', script)(github,
-    { sha, repo: { owner: 'example', repo: 'AXorcist' } }, {},
+  state.run = () => new AsyncFunction('github', 'context', 'core', 'process', 'require', script)(github,
+    { sha, repo: { owner: 'example', repo: 'AXorcist' } }, { summary: { addLink() {}, async write() {} } },
     { env: { TAG: 'v0.2.2', TAG_OBJECT: object } }, name => modules[name]);
-  return writes;
+  return state;
 }
-test('publisher rejects moved tags and verifier disagreement before any write', async () => {
+function fixture(t, releases) {
   const dir = publishFixture();
-  try {
-    await assert.rejects(publish(dir, true), /Tag moved/);
-    fs.appendFileSync(path.join(dir, 'attestations/arm64/SHA256SUMS'), 'tamper');
-    await assert.rejects(publish(dir), /Verifier disagreement/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return { dir, state: publisher(dir, releases) };
+}
+const unrelatedReleases = count => Array.from({ length: count }, (_, id) => ({ id, tag_name: `v0.0.${id}`, draft: true }));
+
+test('fresh publisher uploads, downloads and verifies every asset before publishing', async t => {
+  const { state } = fixture(t);
+  await state.run();
+  assert.deepEqual(state.writes, ['create', 'upload:RELEASE-NOTES.md', 'upload:ASSET-INVENTORY.json', 'upload:SHA256SUMS', 'publish']);
+  assert.deepEqual(state.downloads, ['RELEASE-NOTES.md', 'ASSET-INVENTORY.json', 'SHA256SUMS']);
+  assert.equal(state.releases.length, 1);
+  assert.equal(state.releases[0].draft, false);
 });
-test('publisher refuses payload mutation before any write', async () => {
-  const dir = publishFixture();
-  try {
-    fs.appendFileSync(path.join(dir, 'payload/RELEASE-NOTES.md'), 'tamper');
-    await assert.rejects(publish(dir), /Payload mismatch/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+test('interrupted upload leaves a partial draft that retry refuses without further writes', async t => {
+  const { state } = fixture(t);
+  state.failUploadAt = 2;
+  await assert.rejects(state.run(), /Upload interrupted/);
+  assert.equal(state.releases.length, 1);
+  assert.equal(state.releases[0].draft, true);
+  assert.equal(state.releases[0].assets.length, 1);
+  const writes = [...state.writes];
+  state.failUploadAt = 0;
+  await assert.rejects(state.run(), /Release already exists/);
+  assert.deepEqual(state.writes, writes);
+  assert.equal(state.releases.length, 1);
+  assert.equal(state.releases[0].assets.length, 1);
+});
+for (const draft of [true, false]) {
+  for (const preceding of [0, 100, 200]) {
+    test(`publisher refuses matching ${draft ? 'draft' : 'published release'} on page ${preceding / 100 + 1}`, async t => {
+      const { state } = fixture(t, [...unrelatedReleases(preceding), { tag_name: 'v0.2.2', draft }]);
+      await assert.rejects(state.run(), /Release already exists/);
+      assert.deepEqual(state.writes, []);
+      assert.deepEqual(state.pages, Array.from({ length: preceding / 100 + 1 }, (_, n) => n + 1));
+    });
+  }
+}
+test('publisher refuses mismatched and ambiguous existing drafts', async t => {
+  const { state } = fixture(t, [
+    { tag_name: 'v0.2.2', draft: true, body: 'different notes', target_commitish: 'c'.repeat(40), assets: [] },
+    { tag_name: 'v0.2.2', draft: true, assets: [{ name: 'unknown.zip' }] },
+  ]);
+  await assert.rejects(state.run(), /Release already exists/);
+  assert.deepEqual(state.writes, []);
+});
+test('publisher permits unrelated drafts and finishes an exact full listing page', async t => {
+  const { state } = fixture(t, unrelatedReleases(100));
+  await state.run();
+  assert.deepEqual(state.pages, [1, 2]);
+  assert.equal(state.releases.at(-1).draft, false);
+  assert.equal(state.writes.at(-1), 'publish');
+});
+test('publisher preserves the published tag refusal', async t => {
+  const { state } = fixture(t);
+  state.publishedLookup = { tag_name: 'v0.2.2', draft: false };
+  await assert.rejects(state.run(), /Version already released/);
+  assert.deepEqual(state.pages, []);
+  assert.deepEqual(state.writes, []);
+});
+test('malformed release listings fail before any write', async t => {
+  for (const listing of [null, {}, [null], [{}], [{ tag_name: '', draft: true }], [{ tag_name: 22, draft: true }], [{ tag_name: 'other', draft: 'true' }], unrelatedReleases(101)]) {
+    const { state } = fixture(t);
+    state.listPage = () => listing;
+    await assert.rejects(state.run(), /Invalid release listing/);
+    assert.deepEqual(state.writes, []);
+  }
+});
+test('listing errors and malformed later pages fail before any write', async t => {
+  for (const laterPage of [() => { throw new Error('Listing unavailable'); }, () => ({ releases: [] })]) {
+    const { state } = fixture(t);
+    state.listPage = page => page === 1 ? unrelatedReleases(100) : laterPage();
+    await assert.rejects(state.run(), /Listing unavailable|Invalid release listing/);
+    assert.deepEqual(state.pages, [1, 2]);
+    assert.deepEqual(state.writes, []);
+  }
+});
+test('publisher rejects moved tags and verifier disagreement before any write', async t => {
+  const { dir, state } = fixture(t);
+  state.moved = true;
+  await assert.rejects(state.run(), /Tag moved/);
+  assert.deepEqual(state.writes, []);
+  state.moved = false;
+  fs.appendFileSync(path.join(dir, 'attestations/arm64/SHA256SUMS'), 'tamper');
+  await assert.rejects(state.run(), /Verifier disagreement/);
+  assert.deepEqual(state.writes, []);
+});
+test('publisher refuses payload mutation before any write', async t => {
+  const { dir, state } = fixture(t);
+  fs.appendFileSync(path.join(dir, 'payload/RELEASE-NOTES.md'), 'tamper');
+  await assert.rejects(state.run(), /Payload mismatch/);
+  assert.deepEqual(state.writes, []);
+});
+test('publisher refuses remote digest and final draft changes before publishing', async t => {
+  for (const [fault, message] of [['remoteTampered', /Remote digest mismatch/], ['draftChanged', /Draft changed/]]) {
+    const { state } = fixture(t);
+    state[fault] = true;
+    await assert.rejects(state.run(), message);
+    assert.ok(state.writes.includes('create'));
+    assert.ok(!state.writes.includes('publish'));
+    assert.equal(state.releases[0].draft, true);
+  }
 });
 
 test('ZIP handoff uses the supported template contract, not tar-only explicit assets', async () => {
