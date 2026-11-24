@@ -8,6 +8,7 @@ All notable changes to AXorcist will be documented in this file.
 - Refuse release publishing when the tag already has a draft or published release, including interrupted uploads and drafts on later listing pages. Existing releases require explicit inspection before retrying.
 
 ### Changed
+- Update Commander to 0.3.1 so consumers can use the same CLI parser revision across AXorcist and Swabble.
 - Run main CodeQL analysis on the existing weekly schedule instead of every push, preserving PR scans and independent manual runs.
 
 ## [0.2.3] - 2026-10-23
